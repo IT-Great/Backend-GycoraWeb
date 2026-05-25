@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\LowStockAlertMail;
 use App\Mail\RefundResultMail;
 use App\Models\Cart;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductStock;
 use App\Models\PromoClaim;
+use App\Models\PromoCode;
 use App\Models\Transaction;
 use App\Models\TransactionDetail;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -508,7 +512,6 @@ class TransactionController extends Controller
     //         //     $voucher->increment('times_used');
     //         // }
 
-
     //         // // =========================================================================
     //         // // 2. HITUNG TOTAL HARGA (Pre-calculation)
     //         // // =========================================================================
@@ -576,7 +579,6 @@ class TransactionController extends Controller
     //             $voucher->increment('times_used');
     //         }
 
-
     //         // =========================================================================
     //         // 2. HITUNG TOTAL HARGA BARANG (Pre-calculation)
     //         // =========================================================================
@@ -601,7 +603,6 @@ class TransactionController extends Controller
     //         $totalQuantity = $cartItems->sum('quantity') ?: 1;
     //         $baseShippingRate = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
     //         $totalShippingCost = $baseShippingRate * $totalQuantity;
-
 
     //         // =========================================================================
     //         // 3. POTONG DISKON (10% + 10K)
@@ -921,37 +922,62 @@ class TransactionController extends Controller
         // 1. LAKUKAN PROSES DATABASE (DB TRANSACTION)
         $transactionData = DB::transaction(function () use ($user, $cartItems, $request) {
 
-            $lockedUser = \App\Models\User::lockForUpdate()->find($user->id);
+            $lockedUser = User::lockForUpdate()->find($user->id);
 
             // =========================================================================
             // 1. TENTUKAN TIPE PROMO
             // =========================================================================
             $promoType = $request->promo_type ?? null;
-            $inputCode = !empty($request->promo_code) ? strtoupper($request->promo_code) : null;
+            $inputCode = ! empty($request->promo_code) ? strtoupper($request->promo_code) : null;
 
             $appliedPromoCode = null;
             $isClaimPromo = false;
 
+            // if ($inputCode && $promoType === 'claim') {
+            //     $promoClaim = PromoClaim::where('email', $lockedUser->email)
+            //         ->where('promo_code', $inputCode)
+            //         ->lockForUpdate()
+            //         ->first();
+
+            //     if (!$promoClaim || $promoClaim->is_used) {
+            //         throw new \Exception('Subscriber Promo tidak valid atau sudah digunakan.');
+            //     }
+
+            //     $appliedPromoCode = $promoClaim->promo_code;
+            //     $promoClaim->update(['is_used' => true, 'used_at' => now()]);
+            //     $isClaimPromo = true;
+            // }
+
+            // Di dalam TransactionController.php (Fungsi Checkout)
             if ($inputCode && $promoType === 'claim') {
                 $promoClaim = PromoClaim::where('email', $lockedUser->email)
                     ->where('promo_code', $inputCode)
                     ->lockForUpdate()
                     ->first();
 
-                if (!$promoClaim || $promoClaim->is_used) {
-                    throw new \Exception('Subscriber Promo tidak valid atau sudah digunakan.');
+                // Validasi Ganda di saat Checkout (Mencegah kecurangan)
+                if (! $promoClaim || $promoClaim->is_used) {
+                    throw new \Exception('Promo tidak valid atau sudah digunakan.');
+                }
+                if ($promoClaim->expires_at && Carbon::now()->greaterThan($promoClaim->expires_at)) {
+                    throw new \Exception('Promo sudah kedaluwarsa.');
                 }
 
                 $appliedPromoCode = $promoClaim->promo_code;
-                $promoClaim->update(['is_used' => true, 'used_at' => now()]);
+
+                // UBAH STATUS MENJADI TERPAKAI (LOGIKA C)
+                $promoClaim->update([
+                    'is_used' => true,
+                    'used_at' => now(),
+                ]);
+
                 $isClaimPromo = true;
-            }
-            else if ($inputCode && $promoType === 'voucher') {
-                $voucher = \App\Models\PromoCode::where('code', $inputCode)
+            } elseif ($inputCode && $promoType === 'voucher') {
+                $voucher = PromoCode::where('code', $inputCode)
                     ->lockForUpdate()
                     ->first();
 
-                if (!$voucher || ($voucher->expires_at && now()->greaterThan($voucher->expires_at)) || $voucher->times_used >= $voucher->max_uses) {
+                if (! $voucher || ($voucher->expires_at && now()->greaterThan($voucher->expires_at)) || $voucher->times_used >= $voucher->max_uses) {
                     throw new \Exception('Voucher tidak valid atau sudah habis kuotanya.');
                 }
 
@@ -966,8 +992,8 @@ class TransactionController extends Controller
 
             foreach ($cartItems as $item) {
                 $product = Product::find($item->product_id);
-                if (!$product || $product->stock < $item->quantity) {
-                    throw new \Exception("Stok tidak mencukupi untuk item di keranjang Anda.");
+                if (! $product || $product->stock < $item->quantity) {
+                    throw new \Exception('Stok tidak mencukupi untuk item di keranjang Anda.');
                 }
 
                 $priceToUse = $product->discount_price ?? $product->price;
@@ -984,7 +1010,6 @@ class TransactionController extends Controller
             $baseShippingRate = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
             $totalShippingCost = $baseShippingRate * $totalQuantity;
 
-
             // =========================================================================
             // 3. POTONG DISKON (10% + 10K)
             // =========================================================================
@@ -992,7 +1017,7 @@ class TransactionController extends Controller
 
             if ($isClaimPromo) {
                 if ($totalAmount < 50000) {
-                     throw new \Exception('Minimum belanja Rp 50.000 untuk menggunakan promo ini.');
+                    throw new \Exception('Minimum belanja Rp 50.000 untuk menggunakan promo ini.');
                 }
 
                 // Diskon 10% Barang
@@ -1088,7 +1113,9 @@ class TransactionController extends Controller
                 if ($remainingQuantityToDeduct > 0) {
                     $activeBatches = ProductStock::where('product_id', $product->id)->where('quantity', '>', 0)->orderBy('created_at', 'asc')->lockForUpdate()->get();
                     foreach ($activeBatches as $batch) {
-                        if ($remainingQuantityToDeduct <= 0) break;
+                        if ($remainingQuantityToDeduct <= 0) {
+                            break;
+                        }
                         if ($batch->quantity >= $remainingQuantityToDeduct) {
                             $batch->decrement('quantity', $remainingQuantityToDeduct);
                             $remainingQuantityToDeduct = 0;
@@ -1107,18 +1134,20 @@ class TransactionController extends Controller
                 // =========================================================================
                 if ($product->stock <= 5) {
                     try {
-                        \Illuminate\Support\Facades\Mail::to('gycora.essence@gmail.com')
-                            ->send(new \App\Mail\LowStockAlertMail($product));
+                        Mail::to('gycora.essence@gmail.com')
+                            ->send(new LowStockAlertMail($product));
 
-                        \Illuminate\Support\Facades\Log::warning("Low Stock Alert sent for Product: {$product->name} (Sisa: {$product->stock})");
+                        Log::warning("Low Stock Alert sent for Product: {$product->name} (Sisa: {$product->stock})");
                     } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('Gagal kirim email low stock: ' . $e->getMessage());
+                        Log::error('Gagal kirim email low stock: '.$e->getMessage());
                     }
                 }
 
                 // Format Xendit Items
                 $productName = $product->name;
-                if (!empty($item->color)) { $productName .= ' - ' . $item->color; }
+                if (! empty($item->color)) {
+                    $productName .= ' - '.$item->color;
+                }
 
                 $xenditItems[] = [
                     'name' => $productName,
