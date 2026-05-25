@@ -20,6 +20,8 @@ return [
         'http://localhost:5173',          // Untuk development lokal
         'http://127.0.0.1:5173',
         'https://gycoraessence.netlify.app', // Domain Frontend Production Anda
+        'https://gycoraessence.com',
+        'https://www.gycoraessence.com'
         // Jika ada www atau variasi lain, tambahkan juga
     ],
 
