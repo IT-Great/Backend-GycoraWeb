@@ -86,6 +86,8 @@ Route::get('/products/{slug}/reviews', [ReviewController::class, 'getProductRevi
 // Public Route
 Route::get('/events', [EventController::class, 'index']);
 
+Route::get('/search', [SearchController::class, 'globalSearch']);
+
 // --- PROTECTED ROUTES (Butuh Token Sanctum) ---
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
@@ -206,8 +208,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Route::post('/promo/verify', [PromoController::class, 'verify']);
     Route::post('/promo/verify', [PromoController::class, 'verify'])->middleware('throttle:5,1');
-
-    Route::get('/search', [SearchController::class, 'globalSearch']);
 
     // Rute untuk User (Halaman ConsultWithUs.tsx)
     Route::post('/consultation/log', [ConsultController::class, 'logConsultation']);
