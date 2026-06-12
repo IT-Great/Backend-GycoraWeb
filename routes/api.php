@@ -24,7 +24,9 @@ use App\Http\Controllers\TransferReceivePaymentController;
 use App\Http\Controllers\WishlistController;
 use App\Models\Subscriber;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
@@ -252,4 +254,24 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('/predicted-bestsellers', [DashboardController::class, 'getPredictedBestsellers']);
     Route::get('/recent-activities', [DashboardController::class, 'getRecentActivities']);
     Route::get('/daily-average', [DashboardController::class, 'getAverageDailyRevenue']);
+});
+
+Route::get('/exchange-rates', function () {
+    // Cek apakah data kurs sudah ada di Cache
+    if (!Cache::has('exchange_rates')) {
+        // Jika kosong (mungkin cron belum jalan), paksa jalankan command sekarang juga
+        Artisan::call('currency:update-rates');
+    }
+
+    // Ambil data dari cache. Berikan nilai default IDR = 1 sebagai lapisan keamanan terakhir
+    $rates = Cache::get('exchange_rates', ['IDR' => 1]);
+
+    return response()->json([
+        'status' => 'success',
+        'base' => 'IDR',
+        'data' => [
+            'rates' => $rates,
+            'last_updated' => now()->timezone('Asia/Jakarta')->toDateTimeString()
+        ]
+    ], 200);
 });
