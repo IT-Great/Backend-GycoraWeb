@@ -52,7 +52,8 @@ class AuthControllerTest extends TestCase
             'first_name' => 'New',
             'last_name' => 'Customer',
             'email' => 'newcustomer_' . Str::random(5) . '@example.com',
-            'password' => 'securepassword123'
+            'password' => 'securepassword123',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/register', $payload);
@@ -73,7 +74,8 @@ class AuthControllerTest extends TestCase
             'first_name' => 'Copy',
             'last_name' => 'Cat',
             'email' => $this->user->email, // Menggunakan email yang sudah ada
-            'password' => 'securepassword123'
+            'password' => 'securepassword123',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/register', $payload);
@@ -90,6 +92,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'email' => $this->user->email,
             'password' => 'password123',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/login', $payload);
@@ -104,6 +107,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'email' => $this->user->email,
             'password' => 'wrongpassword',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/login', $payload);
@@ -118,6 +122,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'email' => $this->admin->email,
             'password' => 'admin123',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/login', $payload);
@@ -134,6 +139,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'email' => $this->admin->email,
             'password' => 'admin123',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/admin/login', $payload);
@@ -147,6 +153,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'email' => $this->user->email,
             'password' => 'password123',
+            'recaptcha_token' => 'dummy-token-for-testing'
         ];
 
         $response = $this->postJson('/api/admin/login', $payload);
@@ -164,6 +171,7 @@ class AuthControllerTest extends TestCase
             'first_name' => 'Updated',
             'last_name' => 'Name',
             'email' => $this->user->email, // Email tetap
+            'recaptcha_token' => 'dummy-token-for-testing',
             'phone' => '081234567890'
         ];
 
@@ -187,6 +195,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'old_password' => 'password123',
             'password' => 'newpassword123',
+            'recaptcha_token' => 'dummy-token-for-testing',
             'password_confirmation' => 'newpassword123',
         ];
 
@@ -204,6 +213,7 @@ class AuthControllerTest extends TestCase
         $payload = [
             'old_password' => 'salahbanget',
             'password' => 'newpassword123',
+            'recaptcha_token' => 'dummy-token-for-testing',
             'password_confirmation' => 'newpassword123',
         ];
 
