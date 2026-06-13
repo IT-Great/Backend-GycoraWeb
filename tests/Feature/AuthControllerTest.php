@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Mail\ResetPasswordCodeMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,8 +16,8 @@ use Tests\TestCase;
 
 class AuthControllerTest extends TestCase
 {
-    // use DatabaseTransactions; // Menggunakan ini agar aman untuk MySQL Clever Cloud
-    use RefreshDatabase;
+    use DatabaseTransactions; // Menggunakan ini agar aman untuk MySQL Clever Cloud
+    // use RefreshDatabase;
 
     private $user;
     private $admin;
