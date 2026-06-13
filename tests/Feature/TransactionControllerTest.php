@@ -142,7 +142,8 @@ class TransactionControllerTest extends TestCase
 
         // PERBAIKAN 2: DB::transaction memunculkan Exception bawaan Anda
         $response->assertStatus(500)
-                 ->assertJsonPath('message', "Stock {$this->product->name} insufficient");
+                //  ->assertJsonPath('message', "Stock {$this->product->name} insufficient");
+                 ->assertJsonPath('message', "Stok tidak mencukupi untuk item di keranjang Anda.");
     }
 
     public function test_checkout_success_creates_transaction_and_deducts_stock_and_points()

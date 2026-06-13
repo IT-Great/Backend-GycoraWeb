@@ -6,13 +6,15 @@ use App\Models\Cart;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+// use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CartControllerTest extends TestCase
 {
-    use DatabaseTransactions;
+    // use DatabaseTransactions;
+    use RefreshDatabase;
 
     private $user;
     private $product;

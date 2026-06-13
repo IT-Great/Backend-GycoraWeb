@@ -124,7 +124,7 @@ class ProductControllerTest extends TestCase
             'status' => 'active',
         ]);
 
-        $response = $this->getJson("/api/products/{$product->id}");
+        $response = $this->getJson("/api/products/{$product->slug}");
 
         $response->assertStatus(200)
                  ->assertJsonPath('status', 'success')
