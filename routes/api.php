@@ -518,9 +518,9 @@ Route::post('/reseller/apply', [ResellerController::class, 'apply']);
 
 // Di dalam Grup Middleware Khusus Admin Gycora
 Route::prefix('admin/resellers')->group(function () {
-    Route::get('/applications', [AdminResellerController::class, 'index']);
-    Route::post('/applications/{id}/approve', [AdminResellerController::class, 'approve']);
-    Route::post('/applications/{id}/reject', [AdminResellerController::class, 'reject']);
+    Route::get('/applications', [ResellerController::class, 'index']);
+    Route::post('/applications/{id}/approve', [ResellerController::class, 'approve']);
+    Route::post('/applications/{id}/reject', [ResellerController::class, 'reject']);
 });
 
 // =========================================================================
