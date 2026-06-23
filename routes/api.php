@@ -277,6 +277,7 @@
 // });
 
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\Admin\AdminResellerController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
@@ -293,6 +294,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\PromoController;
+use App\Http\Controllers\ResellerController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\TransactionController;
@@ -509,6 +511,15 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('/predicted-bestsellers', [DashboardController::class, 'getPredictedBestsellers']);
     Route::get('/recent-activities', [DashboardController::class, 'getRecentActivities']);
     Route::get('/daily-average', [DashboardController::class, 'getAverageDailyRevenue']);
+});
+
+// Di dalam Grup Middleware Authenticated User (Pengguna Biasa Gycora)
+Route::post('/reseller/apply', [ResellerController::class, 'apply']);
+
+// Di dalam Grup Middleware Khusus Admin Gycora
+Route::prefix('admin/resellers')->group(function () {
+    Route::get('/applications', [AdminResellerController::class, 'index']);
+    Route::post('/applications/{id}/approve', [AdminResellerController::class, 'approve']);
 });
 
 // =========================================================================
