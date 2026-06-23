@@ -80,9 +80,24 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         // Cek jika user tidak ditemukan, password salah, atau usertype BUKAN 'user'
-        if (! $user || ! Hash::check($request->password, $user->password) || $user->usertype !== 'user' || $user->usertype !== 'reseller') {
+        // if (! $user || ! Hash::check($request->password, $user->password) || $user->usertype !== 'user' || $user->usertype !== 'reseller') {
+        //     throw ValidationException::withMessages([
+        //         'email' => ['Email atau Password salah.'],
+        //     ]);
+        // }
+
+        // Cek jika user tidak ditemukan, password salah
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Email atau Password salah.'],
+            ]);
+        }
+
+        // Cek apakah user memiliki hak akses sebagai pelanggan atau mitra (bukan admin)
+        // Gunakan in_array agar lebih mudah dibaca dan diekspansi kelak
+        if (! in_array($user->usertype, ['user', 'reseller'])) {
+            throw ValidationException::withMessages([
+                'email' => ['Akses ditolak. Akun ini tidak memiliki hak akses sebagai pelanggan.'],
             ]);
         }
 
