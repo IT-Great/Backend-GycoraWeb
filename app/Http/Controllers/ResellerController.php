@@ -12,6 +12,10 @@ class ResellerController extends Controller
     {
         $user = $request->user();
 
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized. Harap login terlebih dahulu.'], 401);
+        }
+
         // 1. Cek apakah sudah jadi reseller
         if ($user->usertype === 'reseller') {
             return response()->json(['message' => 'Anda sudah terdaftar sebagai Business Partner aktif.'], 400);

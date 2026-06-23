@@ -277,7 +277,6 @@
 // });
 
 use App\Http\Controllers\AddressController;
-use App\Http\Controllers\Admin\AdminResellerController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
@@ -320,7 +319,6 @@ Route::middleware('throttle:auth-limiter')->group(function () {
     Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 });
 
-
 // --- KLASTER OTP (Dibatasi 3 request / menit) ---
 Route::middleware('throttle:otp-limiter')->group(function () {
     // Lupa Password (User)
@@ -333,7 +331,6 @@ Route::middleware('throttle:otp-limiter')->group(function () {
     Route::post('/admin/forgot-password/verify-code', [AuthController::class, 'adminVerifyResetCode']);
     Route::post('/admin/forgot-password/reset', [AuthController::class, 'adminResetPassword']);
 });
-
 
 // --- KLASTER LONGGAR / PUBLIC GENERAL ---
 Route::post('/contact', [ContactController::class, 'store']);
@@ -355,7 +352,6 @@ Route::get('/landing-page/consult', [ConsultController::class, 'getConsultPageDa
 Route::get('/products/{slug}/reviews', [ReviewController::class, 'getProductReviews']);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/search', [SearchController::class, 'globalSearch']);
-
 
 // =========================================================================
 // PROTECTED ROUTES: GLOBAL LOGGED IN USERS (Semua User)
@@ -382,6 +378,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/messages/{id}', [ContactController::class, 'showAdminMessage']);
     Route::post('/admin/messages/{id}/respond', [ContactController::class, 'respondMessage']);
     Route::get('/user/contact-history', [ContactController::class, 'userHistory']);
+
+    // Di dalam Grup Middleware Authenticated User (Pengguna Biasa Gycora)
+    Route::post('/reseller/apply', [ResellerController::class, 'apply']);
 
     // Addresses
     Route::get('/addresses', [AddressController::class, 'index']);
@@ -513,9 +512,6 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('/daily-average', [DashboardController::class, 'getAverageDailyRevenue']);
 });
 
-// Di dalam Grup Middleware Authenticated User (Pengguna Biasa Gycora)
-Route::post('/reseller/apply', [ResellerController::class, 'apply']);
-
 // Di dalam Grup Middleware Khusus Admin Gycora
 Route::prefix('admin/resellers')->group(function () {
     Route::get('/applications', [ResellerController::class, 'index']);
@@ -527,7 +523,7 @@ Route::prefix('admin/resellers')->group(function () {
 // EXCHANGE RATES
 // =========================================================================
 Route::get('/exchange-rates', function () {
-    if (!Cache::has('exchange_rates')) {
+    if (! Cache::has('exchange_rates')) {
         Artisan::call('currency:update-rates');
     }
 
@@ -538,7 +534,7 @@ Route::get('/exchange-rates', function () {
         'base' => 'IDR',
         'data' => [
             'rates' => $rates,
-            'last_updated' => now()->timezone('Asia/Jakarta')->toDateTimeString()
-        ]
+            'last_updated' => now()->timezone('Asia/Jakarta')->toDateTimeString(),
+        ],
     ], 200);
 });
