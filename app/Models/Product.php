@@ -87,6 +87,7 @@ class Product extends Model
         'name',
         'slug',
         'description',
+        'wholesale_price',
         'benefits',
         'price',
         'discount_price', // Tambahkan field ini

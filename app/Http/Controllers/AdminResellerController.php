@@ -51,4 +51,22 @@ class AdminResellerController extends Controller
             return response()->json(['message' => 'Gagal memproses persetujuan: ' . $e->getMessage()], 500);
         }
     }
+
+    // Eksekusi Penolakan
+    public function reject($id)
+    {
+        $application = ResellerApplication::findOrFail($id);
+
+        if ($application->status !== 'pending') {
+            return response()->json(['message' => 'Pendaftaran ini sudah diproses sebelumnya.'], 400);
+        }
+
+        // Cukup ubah status form, tidak perlu mengubah wujud User
+        $application->update(['status' => 'rejected']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Aplikasi Business Partner telah ditolak.'
+        ]);
+    }
 }

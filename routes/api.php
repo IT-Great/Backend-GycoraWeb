@@ -520,6 +520,7 @@ Route::post('/reseller/apply', [ResellerController::class, 'apply']);
 Route::prefix('admin/resellers')->group(function () {
     Route::get('/applications', [AdminResellerController::class, 'index']);
     Route::post('/applications/{id}/approve', [AdminResellerController::class, 'approve']);
+    Route::post('/applications/{id}/reject', [AdminResellerController::class, 'reject']);
 });
 
 // =========================================================================
