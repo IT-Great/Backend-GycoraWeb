@@ -80,7 +80,7 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         // Cek jika user tidak ditemukan, password salah, atau usertype BUKAN 'user'
-        if (! $user || ! Hash::check($request->password, $user->password) || $user->usertype !== 'user') {
+        if (! $user || ! Hash::check($request->password, $user->password) || $user->usertype !== 'user' || $user->usertype !== 'reseller') {
             throw ValidationException::withMessages([
                 'email' => ['Email atau Password salah.'],
             ]);
