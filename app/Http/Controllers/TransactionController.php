@@ -996,11 +996,29 @@ class TransactionController extends Controller
                     throw new \Exception('Stok tidak mencukupi untuk item di keranjang Anda.');
                 }
 
-                $priceToUse = $product->discount_price ?? $product->price;
+                // $priceToUse = $product->discount_price ?? $product->price;
 
+                // if ($promoType === 'voucher' && $product->voucher_discount_price > 0) {
+                //     $priceToUse = $product->voucher_discount_price;
+                // }
+
+                // --- LOGIKA HARGA BARU ---
+                $priceToUse = $product->price;
+
+                // 1. Cek jika dia reseller dan produk punya harga grosir
+                if ($lockedUser->usertype === 'reseller' && $product->wholesale_price > 0) {
+                    $priceToUse = $product->wholesale_price;
+                }
+                // 2. Jika bukan reseller, cek diskon publik
+                elseif ($product->discount_price > 0 && $product->discount_price < $product->price) {
+                    $priceToUse = $product->discount_price;
+                }
+
+                // 3. Timpa jika menggunakan voucher khusus
                 if ($promoType === 'voucher' && $product->voucher_discount_price > 0) {
                     $priceToUse = $product->voucher_discount_price;
                 }
+                // -------------------------
 
                 $totalAmount += ($priceToUse * $item->quantity);
             }
@@ -1080,10 +1098,24 @@ class TransactionController extends Controller
                 // Kunci produk untuk update stok dengan aman
                 $product = Product::lockForUpdate()->find($item->product_id);
 
-                $priceToUse = $product->discount_price ?? $product->price;
+                // $priceToUse = $product->discount_price ?? $product->price;
+                // if ($promoType === 'voucher' && $product->voucher_discount_price > 0) {
+                //     $priceToUse = $product->voucher_discount_price;
+                // }
+
+                // --- LOGIKA HARGA BARU ---
+                $priceToUse = $product->price;
+
+                if ($lockedUser->usertype === 'reseller' && $product->wholesale_price > 0) {
+                    $priceToUse = $product->wholesale_price;
+                } elseif ($product->discount_price > 0 && $product->discount_price < $product->price) {
+                    $priceToUse = $product->discount_price;
+                }
+
                 if ($promoType === 'voucher' && $product->voucher_discount_price > 0) {
                     $priceToUse = $product->voucher_discount_price;
                 }
+                // -------------------------
 
                 // Simpan Detail dengan ID Transaksi yang sudah dibuat
                 TransactionDetail::create([
