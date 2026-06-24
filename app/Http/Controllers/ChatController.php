@@ -11,7 +11,7 @@ class ChatController extends Controller
 {
     // Mengambil daftar staf (untuk sisi user)
     public function getStaffList() {
-        $staff = User::where('usertype', '!=', 'user')->get();
+        $staff = User::where('usertype', 'admin')->get();
         return response()->json($staff);
     }
 
