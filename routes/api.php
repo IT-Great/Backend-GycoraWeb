@@ -276,6 +276,7 @@
 //     ], 200);
 // });
 
+use App\Http\Controllers\AccessPolicyController;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
@@ -517,6 +518,19 @@ Route::prefix('admin/resellers')->group(function () {
     Route::get('/applications', [ResellerController::class, 'index']);
     Route::post('/applications/{id}/approve', [ResellerController::class, 'approve']);
     Route::post('/applications/{id}/reject', [ResellerController::class, 'reject']);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+
+    // 1. GET: Semua staf admin (termasuk gudang, dll) butuh endpoint ini untuk merender menu sidebar
+    Route::get('/access-policies', [AccessPolicyController::class, 'index']);
+
+    // 2. PUT: HANYA Superadmin yang boleh menyimpan/mengubah konfigurasi menu
+    Route::middleware(['role:superadmin'])->group(function () {
+        Route::put('/access-policies', [AccessPolicyController::class, 'update']);
+    });
+
+    // ... (rute CRUD user dan lainnya yang sebelumnya sudah dibuat)
 });
 
 // =========================================================================
