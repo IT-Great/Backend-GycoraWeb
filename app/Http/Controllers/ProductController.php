@@ -934,9 +934,6 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
-use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver;
-
 class ProductController extends Controller
 {
     public function index()
@@ -1308,29 +1305,5 @@ class ProductController extends Controller
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
-    }
-
-    private function optimizeAndSaveImage($file, $folder)
-    {
-        // 1. Inisialisasi Image Manager dengan driver GD
-        $manager = new ImageManager(new Driver());
-
-        // 2. Baca file yang diunggah
-        $image = $manager->read($file);
-
-        // 3. Scale Down: Maksimal lebar 1000px.
-        $image->scaleDown(width: 1000);
-
-        // 4. Encode ke format WebP dengan kualitas 80%
-        $encoded = $image->toWebp(80);
-
-        // 5. Buat nama file unik dengan ekstensi .webp
-        $filename = $folder . '/' . Str::random(40) . '.webp';
-
-        // 6. Simpan ke Local Storage (disk public)
-        Storage::disk('public')->put($filename, $encoded->toString());
-
-        // 7. Kembalikan path relatifnya
-        return '/storage/' . $filename;
     }
 }
