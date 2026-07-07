@@ -996,6 +996,57 @@ class ProductController extends Controller
         ]);
     }
 
+    // public function store(Request $request)
+    // {
+    //     $validator = Validator::make($request->all(), [
+    //         'category_id' => 'required|exists:categories,id',
+    //         'sku' => 'required|unique:products',
+    //         'name' => 'required|string|max:255',
+    //         'description' => 'nullable|string',
+    //         'benefits' => 'nullable|string',
+    //         'price' => 'required|numeric|min:0',
+    //         'discount_price' => 'nullable|numeric|min:0', // Tambahkan validasi
+    //         'voucher_discount_price' => 'nullable|numeric|min:0', // <--- BARU
+    //         'stock' => 'required|integer|min:0',
+    //         'image_url' => 'nullable|string',
+    //         'variant_video' => 'nullable|string',
+    //         'color' => 'nullable|array',
+    //         'status' => 'required|in:active,inactive',
+    //     ]);
+
+    //     if ($validator->fails()) {
+    //         return response()->json($validator->errors(), 422);
+    //     }
+
+    //     DB::beginTransaction();
+    //     try {
+    //         $data = $request->all();
+
+    //         if (empty($data['slug'])) {
+    //             // $data['slug'] = Str::slug($data['name']) . '-' . Str::random(5);
+    //             $data['slug'] = Str::slug($data['name']);
+    //         }
+
+    //         $product = Product::create($data);
+
+    //         if ($request->stock > 0) {
+    //             $batchCode = 'STK-'.now()->format('YmdHis').'-'.strtoupper(Str::random(4));
+    //             ProductStock::create([
+    //                 'product_id' => $product->id,
+    //                 'batch_code' => $batchCode,
+    //                 'quantity' => $request->stock,
+    //                 'initial_quantity' => $request->stock,
+    //             ]);
+    //         }
+
+    //         DB::commit();
+    //         return response()->json($product, 201);
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         return response()->json(['message' => $e->getMessage()], 500);
+    //     }
+    // }
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -1005,8 +1056,15 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'benefits' => 'nullable|string',
             'price' => 'required|numeric|min:0',
-            'discount_price' => 'nullable|numeric|min:0', // Tambahkan validasi
-            'voucher_discount_price' => 'nullable|numeric|min:0', // <--- BARU
+            'discount_price' => 'nullable|numeric|min:0',
+            'voucher_discount_price' => 'nullable|numeric|min:0',
+
+            // 👇 Validasi Multi Currency 👇
+            'prices' => 'nullable|array',
+            'prices.*' => 'nullable|numeric|min:0',
+            'discount_prices' => 'nullable|array',
+            'discount_prices.*' => 'nullable|numeric|min:0',
+
             'stock' => 'required|integer|min:0',
             'image_url' => 'nullable|string',
             'variant_video' => 'nullable|string',
@@ -1023,9 +1081,12 @@ class ProductController extends Controller
             $data = $request->all();
 
             if (empty($data['slug'])) {
-                // $data['slug'] = Str::slug($data['name']) . '-' . Str::random(5);
                 $data['slug'] = Str::slug($data['name']);
             }
+
+            // Tangani Array JSON jika kosong
+            $data['prices'] = $request->input('prices', null);
+            $data['discount_prices'] = $request->input('discount_prices', null);
 
             $product = Product::create($data);
 
@@ -1047,6 +1108,45 @@ class ProductController extends Controller
         }
     }
 
+    // public function update(Request $request, $id)
+    // {
+    //     $product = Product::findOrFail($id);
+
+    //     $validator = Validator::make($request->all(), [
+    //         'category_id' => 'required|exists:categories,id',
+    //         'sku' => "required|unique:products,sku,$id",
+    //         'name' => 'required|string|max:255',
+    //         'description' => 'nullable|string',
+    //         'benefits' => 'nullable|string',
+    //         'price' => 'required|numeric|min:0',
+    //         'discount_price' => 'nullable|numeric|min:0', // Tambahkan validasi
+    //         'voucher_discount_price' => 'nullable|numeric|min:0', // <--- BARU
+    //         'image_url' => 'nullable|string',
+    //         'variant_video' => 'nullable|string',
+    //         'color' => 'nullable|array',
+    //         'status' => 'required|in:active,inactive',
+    //     ]);
+
+    //     if ($validator->fails()) {
+    //         return response()->json($validator->errors(), 422);
+    //     }
+
+    //     $data = $request->except(['stock', '_method']);
+
+    //     if ($request->has('name') && $request->name !== $product->name) {
+    //         // $data['slug'] = Str::slug($data['name']) . '-' . Str::random(5);
+    //         $data['slug'] = Str::slug($request->name);
+    //     }
+
+    //     if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
+    //         $oldKey = str_replace(env('AWS_URL') . '/', '', $product->image_url);
+    //         Storage::disk('s3')->delete($oldKey);
+    //     }
+
+    //     $product->update($data);
+    //     return response()->json($product, 200);
+    // }
+
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
@@ -1058,8 +1158,15 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'benefits' => 'nullable|string',
             'price' => 'required|numeric|min:0',
-            'discount_price' => 'nullable|numeric|min:0', // Tambahkan validasi
-            'voucher_discount_price' => 'nullable|numeric|min:0', // <--- BARU
+            'discount_price' => 'nullable|numeric|min:0',
+            'voucher_discount_price' => 'nullable|numeric|min:0',
+
+            // 👇 Validasi Multi Currency 👇
+            'prices' => 'nullable|array',
+            'prices.*' => 'nullable|numeric|min:0',
+            'discount_prices' => 'nullable|array',
+            'discount_prices.*' => 'nullable|numeric|min:0',
+
             'image_url' => 'nullable|string',
             'variant_video' => 'nullable|string',
             'color' => 'nullable|array',
@@ -1073,9 +1180,12 @@ class ProductController extends Controller
         $data = $request->except(['stock', '_method']);
 
         if ($request->has('name') && $request->name !== $product->name) {
-            // $data['slug'] = Str::slug($data['name']) . '-' . Str::random(5);
             $data['slug'] = Str::slug($request->name);
         }
+
+        // Tangani Array JSON jika kosong
+        $data['prices'] = $request->input('prices', null);
+        $data['discount_prices'] = $request->input('discount_prices', null);
 
         if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
             $oldKey = str_replace(env('AWS_URL') . '/', '', $product->image_url);
