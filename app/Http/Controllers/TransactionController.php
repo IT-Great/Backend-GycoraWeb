@@ -28,6 +28,7 @@ use Xendit\Invoice\InvoiceApi;
 use Xendit\Refund\CreateRefund;
 use Xendit\Refund\RefundApi;
 use Xendit\XenditSdkException;
+use App\Services\BiteshipService;
 
 class TransactionController extends Controller
 {
@@ -1935,6 +1936,56 @@ class TransactionController extends Controller
             return response()->json(['message' => 'Gagal mengambil resi dari Biteship: '.$response->body()], 400);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Terjadi kesalahan sistem: '.$e->getMessage()], 500);
+        }
+    }
+
+    public function retryShipping($id)
+    {
+        $transaction = Transaction::with(['details.product', 'address', 'user'])->findOrFail($id);
+
+        if ($transaction->shipping_method !== 'biteship') {
+            return response()->json(['message' => 'Metode pengiriman bukan Biteship, tidak bisa di-request ulang.'], 400);
+        }
+
+        // Pastikan kita tidak menimpa resi yang sebenarnya sudah sukses
+        if ($transaction->biteship_order_id && !str_starts_with($transaction->tracking_number, 'API ERR') && !str_starts_with($transaction->tracking_number, 'SYS ERR')) {
+            return response()->json(['message' => 'Pesanan ini sudah memiliki nomor resi yang valid.'], 400);
+        }
+
+        try {
+            // Panggil ulang service pembuat pesanan Biteship
+            $biteship = new BiteshipService;
+            $order = $biteship->createOrder($transaction);
+
+            if (isset($order['id'])) {
+                $transaction->update([
+                    'biteship_order_id' => $order['id'],
+                    'tracking_number' => $order['courier']['waybill_id'] ?? 'Pending',
+                    'shipping_status' => strtolower($order['status'] ?? 'pending'),
+                ]);
+
+                return response()->json([
+                    'message' => 'Berhasil! Pesanan sukses dikirim ulang ke Biteship.',
+                    'tracking_number' => $transaction->tracking_number
+                ]);
+            } else {
+                $errorMsg = $order['error'] ?? ($order['message'] ?? 'Unknown Biteship API Error');
+
+                $transaction->update([
+                    'tracking_number' => 'API ERR: '.substr($errorMsg, 0, 200),
+                    'shipping_status' => 'error',
+                ]);
+
+                Log::error('Biteship Retry Failed: '.json_encode($order));
+                return response()->json(['message' => 'Gagal request ke Biteship: ' . $errorMsg], 400);
+            }
+        } catch (\Exception $e) {
+            $transaction->update([
+                'tracking_number' => 'SYS ERR: '.substr($e->getMessage(), 0, 200),
+                'shipping_status' => 'error',
+            ]);
+
+            return response()->json(['message' => 'Terjadi kesalahan sistem internal: ' . $e->getMessage()], 500);
         }
     }
 

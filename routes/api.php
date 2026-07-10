@@ -434,6 +434,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/transactions/{id}/tracking', [TransactionController::class, 'adminTrackOrder']);
     Route::get('/admin/transactions/{id}/print-label', [TransactionController::class, 'printLabel']);
 
+    Route::post('/admin/transactions/{id}/retry-shipping', [TransactionController::class, 'retryShipping']);
+
     Route::get('/admin/sales-report', [TransactionController::class, 'salesReport']);
 
     // Approval Refund
