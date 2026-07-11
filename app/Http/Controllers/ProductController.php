@@ -173,7 +173,6 @@
 //     //     }
 //     // }
 
-
 //     // public function update(Request $request, $id)
 //     // {
 //     //     $product = Product::findOrFail($id);
@@ -216,7 +215,6 @@
 
 //     //     return response()->json($product, 200);
 //     // }
-
 
 //     // public function destroy($id)
 //     // {
@@ -927,11 +925,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\ProductStock;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -941,6 +940,7 @@ class ProductController extends Controller
         try {
             // HANYA AMBIL YANG ACTIVE
             $products = Product::with('category')->where('status', 'active')->latest()->get();
+
             return response()->json($products, 200);
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
@@ -951,6 +951,7 @@ class ProductController extends Controller
     {
         // HANYA AMBIL YANG INACTIVE
         $products = Product::with('category')->where('status', 'inactive')->latest()->get();
+
         return response()->json($products, 200);
     }
 
@@ -962,7 +963,7 @@ class ProductController extends Controller
             }])->where('slug', $slug)->firstOrFail();
 
             return response()->json(['status' => 'success', 'data' => $product], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return response()->json(['status' => 'error', 'message' => 'Produk tidak ditemukan.'], 404);
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
@@ -973,26 +974,26 @@ class ProductController extends Controller
     {
         $request->validate([
             'extension' => 'required|string',
-            'content_type' => 'required|string'
+            'content_type' => 'required|string',
         ]);
 
-        $filename = 'products/' . Str::random(40) . '.' . $request->extension;
+        $filename = 'products/'.Str::random(40).'.'.$request->extension;
 
         $uploadResponse = Storage::disk('s3')->temporaryUploadUrl(
             $filename,
             now()->addMinutes(15),
             [
                 'ContentType' => $request->content_type,
-                'ACL' => 'public-read'
+                'ACL' => 'public-read',
             ]
         );
 
-        $fileUrl = env('AWS_URL') . '/' . $filename;
+        $fileUrl = env('AWS_URL').'/'.$filename;
 
         return response()->json([
             'upload_url' => $uploadResponse['url'],
             'upload_headers' => $uploadResponse['headers'],
-            'file_url' => $fileUrl
+            'file_url' => $fileUrl,
         ]);
     }
 
@@ -1057,6 +1058,7 @@ class ProductController extends Controller
             'benefits' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'discount_price' => 'nullable|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
             'voucher_discount_price' => 'nullable|numeric|min:0',
 
             // 👇 Validasi Multi Currency 👇
@@ -1064,6 +1066,10 @@ class ProductController extends Controller
             'prices.*' => 'nullable|numeric|min:0',
             'discount_prices' => 'nullable|array',
             'discount_prices.*' => 'nullable|numeric|min:0',
+            'wholesale_prices' => 'nullable|array',
+            'wholesale_prices.*' => 'nullable|numeric|min:0',
+            'voucher_discount_prices' => 'nullable|array',
+            'voucher_discount_prices.*' => 'nullable|numeric|min:0',
 
             'stock' => 'required|integer|min:0',
             'image_url' => 'nullable|string',
@@ -1087,6 +1093,8 @@ class ProductController extends Controller
             // Tangani Array JSON jika kosong
             $data['prices'] = $request->input('prices', null);
             $data['discount_prices'] = $request->input('discount_prices', null);
+            $data['wholesale_prices'] = $request->input('wholesale_prices', null); // 👇 Tambahkan ini
+            $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null); // 👇 Tambahkan ini
 
             $product = Product::create($data);
 
@@ -1101,9 +1109,11 @@ class ProductController extends Controller
             }
 
             DB::commit();
+
             return response()->json($product, 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
@@ -1159,6 +1169,7 @@ class ProductController extends Controller
             'benefits' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'discount_price' => 'nullable|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
             'voucher_discount_price' => 'nullable|numeric|min:0',
 
             // 👇 Validasi Multi Currency 👇
@@ -1166,6 +1177,11 @@ class ProductController extends Controller
             'prices.*' => 'nullable|numeric|min:0',
             'discount_prices' => 'nullable|array',
             'discount_prices.*' => 'nullable|numeric|min:0',
+
+            'wholesale_prices' => 'nullable|array',
+            'wholesale_prices.*' => 'nullable|numeric|min:0',
+            'voucher_discount_prices' => 'nullable|array',
+            'voucher_discount_prices.*' => 'nullable|numeric|min:0',
 
             'image_url' => 'nullable|string',
             'variant_video' => 'nullable|string',
@@ -1186,13 +1202,16 @@ class ProductController extends Controller
         // Tangani Array JSON jika kosong
         $data['prices'] = $request->input('prices', null);
         $data['discount_prices'] = $request->input('discount_prices', null);
+        $data['wholesale_prices'] = $request->input('wholesale_prices', null);
+        $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null);
 
         if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
-            $oldKey = str_replace(env('AWS_URL') . '/', '', $product->image_url);
+            $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
             Storage::disk('s3')->delete($oldKey);
         }
 
         $product->update($data);
+
         return response()->json($product, 200);
     }
 
@@ -1221,14 +1240,15 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
 
         if ($product->image_url) {
-            $oldKey = str_replace(env('AWS_URL') . '/', '', $product->image_url);
+            $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
             Storage::disk('s3')->delete($oldKey);
         }
 
         try {
             $product->delete(); // Hapus permanen
+
             return response()->json(['message' => 'Product deleted permanently'], 200);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             return response()->json(['message' => 'Produk tidak bisa dihapus karena sudah memiliki riwayat transaksi'], 422);
         }
     }
@@ -1243,7 +1263,7 @@ class ProductController extends Controller
             $colorName = '';
             if (is_array($product->color) && count($product->color) > 0) {
                 $firstColor = $product->color[0];
-                if (isset($firstColor['name']) && !empty($firstColor['name'])) {
+                if (isset($firstColor['name']) && ! empty($firstColor['name'])) {
                     $colorName = trim($firstColor['name']);
                 }
             }
@@ -1251,10 +1271,10 @@ class ProductController extends Controller
             $baseName = $product->name; // Set default awal
 
             // 2. Logika Dinamis: Hapus "Nama Warna" dari "Nama Produk Lengkap"
-            if (!empty($colorName)) {
+            if (! empty($colorName)) {
                 // Kita gunakan Regex untuk mencari dan menghapus nama warna yang berada di PALING AKHIR teks (case-insensitive)
                 // Contoh: "Gycora Shampoo Rose Gold" dikurangi "Rose Gold" -> "Gycora Shampoo"
-                $pattern = '/' . preg_quote($colorName, '/') . '$/i';
+                $pattern = '/'.preg_quote($colorName, '/').'$/i';
                 $baseName = preg_replace($pattern, '', $product->name);
                 $baseName = trim($baseName);
 
@@ -1274,14 +1294,14 @@ class ProductController extends Controller
             // 3. Cari produk sekeluarga berdasarkan Base Name murni yang sudah didapat
             $relatedProducts = Product::where('status', 'active')
                 ->where('category_id', $product->category_id)
-                ->where('name', 'like', $baseName . '%')
+                ->where('name', 'like', $baseName.'%')
                 ->get(['id', 'name', 'slug', 'color', 'image_url']);
 
             return response()->json([
                 'status' => 'success',
                 'current_product' => $product,
                 'base_name_detected' => $baseName, // (Opsional) Mengirim base name untuk kemudahan debugging
-                'variants' => $relatedProducts
+                'variants' => $relatedProducts,
             ], 200);
 
         } catch (\Exception $e) {
@@ -1300,7 +1320,7 @@ class ProductController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'data' => $products
+                'data' => $products,
             ], 200);
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);

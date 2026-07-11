@@ -93,7 +93,8 @@ class Product extends Model
         'prices',
         'discount_price', // Tambahkan field ini
         'discount_prices',
-        'voucher_discount_price',
+        'wholesale_price', 'wholesale_prices',
+        'voucher_discount_price', 'voucher_discount_prices',
         'stock',
         'image_url',
         'variant_images',
@@ -107,7 +108,9 @@ class Product extends Model
         'discount_price' => 'decimal:2', // Casting juga sebagai decimal
         'voucher_discount_price' => 'decimal:2',
         'prices' => 'array',
-        'discount_prices' => 'array', 
+        'discount_prices' => 'array',
+        'wholesale_prices' => 'array',
+        'voucher_discount_prices' => 'array',
         'stock' => 'integer',
         'variant_images' => 'array',
         'color' => 'array',
