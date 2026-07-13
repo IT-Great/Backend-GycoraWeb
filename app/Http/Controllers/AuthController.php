@@ -626,7 +626,7 @@ class AuthController extends Controller
 
         // [PERBAIKAN] Cek apakah email ini milik staf internal (bukan pelanggan biasa)
         $admin = User::where('email', $request->email)
-            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting'])
+            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
             ->first();
 
         if (!$admin) {
@@ -662,7 +662,7 @@ class AuthController extends Controller
 
         // [PERBAIKAN] Validasi staf
         $admin = User::where('email', $request->email)
-            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting'])
+            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
             ->first();
         if (!$admin) return response()->json(['message' => 'Akses ditolak.'], 403);
 
@@ -694,7 +694,7 @@ class AuthController extends Controller
 
         // [PERBAIKAN] Validasi staf
         $admin = User::where('email', $request->email)
-            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting'])
+            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
             ->first();
         if (!$admin) return response()->json(['message' => 'Akses ditolak.'], 403);
 
