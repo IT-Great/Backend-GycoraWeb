@@ -132,7 +132,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        $allowedAdminRoles = ['admin', 'superadmin', 'gudang', 'accounting'];
+        $allowedAdminRoles = ['admin', 'superadmin', 'gudang', 'accounting', 'cs'];
 
         // Cek autentikasi dan otorisasi role
         if (! $user || ! Hash::check($request->password, $user->password) || ! in_array($user->usertype, $allowedAdminRoles)) {
