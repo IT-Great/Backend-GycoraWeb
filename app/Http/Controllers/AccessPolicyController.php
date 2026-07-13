@@ -21,7 +21,7 @@ class AccessPolicyController extends Controller
                     'admin' => [],
                     'gudang' => [],
                     'accounting' => [],
-                    'reseller' => [],
+                    'cs' => [],
                 ]
             ]);
         }
