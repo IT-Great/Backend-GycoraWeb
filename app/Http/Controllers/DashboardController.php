@@ -13,250 +13,11 @@ use App\Http\Controllers\Controller;
 
 class DashboardController extends Controller
 {
-    // // public function getStats()
-    // // {
-    // //     // 1. Total Sales (Hanya transaksi yang sukses/completed)
-    // //     $totalSales = Transaction::where('status', 'completed')->sum('total_amount');
-
-    // //     // 2. Total Products (Hanya yang aktif)
-    // //     $totalProducts = Product::where('status', 'active')->count();
-
-    // //     // 3. Total Transactions
-    // //     $totalTransactions = Transaction::count();
-
-    // //     // 4. Total Users (Tipe user biasa)
-    // //     $totalUsers = User::where('usertype', 'user')->count();
-
-    // //     return response()->json([
-    // //         'total_sales' => (float) $totalSales,
-    // //         'total_products' => $totalProducts,
-    // //         'total_transactions' => $totalTransactions,
-    // //         'total_users' => $totalUsers,
-    // //     ]);
-    // // }
-
-    // // =========================================================================
-    // // [BARU] MASTER ENDPOINT (SOLUSI ERROR MAX_USER_CONNECTIONS)
-    // // =========================================================================
-    // public function getDashboardMasterData(C45Service $c45Service)
-    // {
-    //     // Hanya menggunakan 1 koneksi database untuk mengambil semua data ini
-    //     return response()->json([
-    //         'stats'      => $this->fetchStatsData(),
-    //         'revenue'    => $this->fetchRevenueChartData(),
-    //         'popular'    => $this->fetchPopularProductsData(),
-    //         'predicted'  => $this->fetchPredictedBestsellersData($c45Service),
-    //         'activities' => $this->fetchRecentActivitiesData(),
-    //         'daily'      => $this->fetchAverageDailyRevenueData(),
-    //     ]);
-    // }
-
-
-    // // =========================================================================
-    // // PRIVATE HELPER METHODS (MENGEMBALIKAN ARRAY, BUKAN JSON RESPONSE)
-    // // =========================================================================
-
-    // private function fetchStatsData()
-    // {
-    //     $currentMonthSales = Transaction::where('status', 'completed')
-    //         ->whereMonth('created_at', Carbon::now()->month)
-    //         ->whereYear('created_at', Carbon::now()->year)
-    //         ->sum('total_amount');
-
-    //     $lastMonthSales = Transaction::where('status', 'completed')
-    //         ->whereMonth('created_at', Carbon::now()->subMonth()->month)
-    //         ->whereYear('created_at', Carbon::now()->subMonth()->year)
-    //         ->sum('total_amount');
-
-    //     $salesGrowth = $lastMonthSales > 0 ? (($currentMonthSales - $lastMonthSales) / $lastMonthSales) * 100 : 0;
-    //     $totalSalesAllTime = Transaction::where('status', 'completed')->sum('total_amount');
-
-    //     $totalProducts = Product::where('status', 'active')->count();
-    //     $newProductsThisMonth = Product::where('status', 'active')
-    //         ->whereMonth('created_at', Carbon::now()->month)
-    //         ->count();
-
-    //     $currentMonthTransactions = Transaction::whereMonth('created_at', Carbon::now()->month)->count();
-    //     $lastMonthTransactions = Transaction::whereMonth('created_at', Carbon::now()->subMonth()->month)->count();
-    //     $transactionGrowth = $lastMonthTransactions > 0 ? (($currentMonthTransactions - $lastMonthTransactions) / $lastMonthTransactions) * 100 : 0;
-    //     $totalTransactionsAllTime = Transaction::count();
-
-    //     $totalUsers = User::where('usertype', 'user')->count();
-    //     $newUsersThisMonth = User::where('usertype', 'user')
-    //         ->whereMonth('created_at', Carbon::now()->month)
-    //         ->count();
-
-    //     return [
-    //         'total_sales' => (float) $totalSalesAllTime,
-    //         'sales_growth' => round($salesGrowth, 1),
-    //         'total_products' => $totalProducts,
-    //         'new_products_growth' => $newProductsThisMonth,
-    //         'total_transactions' => $totalTransactionsAllTime,
-    //         'transaction_growth' => round($transactionGrowth, 1),
-    //         'total_users' => $totalUsers,
-    //         'new_users_growth' => $newUsersThisMonth,
-    //     ];
-    // }
-
-    // private function fetchRevenueChartData()
-    // {
-    //     return Transaction::where('status', 'completed')
-    //         ->where('created_at', '>=', Carbon::now()->subMonths(6))
-    //         ->select(
-    //             DB::raw('SUM(total_amount) as total'),
-    //             DB::raw("DATE_FORMAT(created_at, '%b') as month"),
-    //             DB::raw('MONTH(created_at) as month_num')
-    //         )
-    //         ->groupBy('month', 'month_num')
-    //         ->orderBy('month_num', 'ASC')
-    //         ->get()
-    //         ->toArray();
-    // }
-
-    // private function fetchPopularProductsData()
-    // {
-    //     return TransactionDetail::select('products.name', DB::raw('SUM(transaction_details.quantity) as total_sold'))
-    //         ->join('products', 'products.id', '=', 'transaction_details.product_id')
-    //         ->groupBy('products.name')
-    //         ->orderBy('total_sold', 'DESC')
-    //         ->limit(5)
-    //         ->get()
-    //         ->toArray();
-    // }
-
-    // private function fetchPredictedBestsellersData(C45Service $c45Service)
-    // {
-    //     $products = Product::with('category')
-    //         ->select('products.*', DB::raw('COALESCE(SUM(transaction_details.quantity), 0) as total_sold'))
-    //         ->leftJoin('transaction_details', 'products.id', '=', 'transaction_details.product_id')
-    //         ->leftJoin('transactions', function ($join) {
-    //             $join->on('transaction_details.transaction_id', '=', 'transactions.id')
-    //                 ->where('transactions.status', '=', 'completed');
-    //         })
-    //         ->where('products.status', 'active')
-    //         ->groupBy('products.id')
-    //         ->get();
-
-    //     if ($products->isEmpty()) {
-    //         return [];
-    //     }
-
-    //     $avgSold = $products->avg('total_sold') ?: 1;
-    //     $avgPrice = $products->avg('price') ?: 100000;
-
-    //     $dataset = [];
-    //     $predictData = [];
-
-    //     foreach ($products as $p) {
-    //         $priceCategory = $p->price > $avgPrice ? 'High' : 'Competitive';
-    //         $stockCategory = $p->stock < 10 ? 'Low' : 'Safe';
-    //         $hasDiscount = $p->discount_price ? 'Yes' : 'No';
-    //         $categoryName = $p->category->name ?? 'Unknown';
-
-    //         $label = $p->total_sold >= $avgSold ? 'Laris' : 'Tidak_Laris';
-
-    //         $features = [
-    //             'category' => $categoryName,
-    //             'price_level' => $priceCategory,
-    //             'is_discounted' => $hasDiscount,
-    //             'stock_status' => $stockCategory,
-    //             'label' => $label
-    //         ];
-
-    //         $dataset[] = $features;
-    //         $predictData[$p->id] = [
-    //             'product' => $p,
-    //             'features' => $features
-    //         ];
-    //     }
-
-    //     $attributes = ['category', 'price_level', 'is_discounted', 'stock_status'];
-    //     $decisionTree = $c45Service->buildTree($dataset, $attributes, 'label');
-
-    //     $results = [];
-
-    //     foreach ($predictData as $id => $data) {
-    //         $product = $data['product'];
-    //         $features = $data['features'];
-
-    //         $prediction = $c45Service->predict($decisionTree, $features);
-    //         $statusLabel = $prediction['label'];
-    //         $rulePath = empty($prediction['path']) ? ['Historical Base Data'] : $prediction['path'];
-
-    //         if ($statusLabel === 'Laris') {
-    //             $results[] = [
-    //                 'id' => $product->id,
-    //                 'name' => $product->name,
-    //                 'image' => $product->image,
-    //                 'reasons' => "Rule Path: " . implode(" ➔ ", $rulePath),
-    //                 'label' => 'High Potential (C4.5)',
-    //                 'color' => 'text-green-600',
-    //                 'score' => random_int(75, 100)
-    //             ];
-    //         }
-    //     }
-
-    //     if (empty($results)) {
-    //         return $this->fetchPopularProductsData();
-    //     }
-
-    //     return array_slice($results, 0, 100);
-    // }
-
-    // private function fetchRecentActivitiesData()
-    // {
-    //     return Transaction::with('user:id,first_name,last_name,email')
-    //         ->select('id', 'order_id', 'user_id', 'total_amount', 'status', 'created_at')
-    //         ->latest()
-    //         ->limit(5)
-    //         ->get()
-    //         ->map(function ($transaction) {
-    //             return [
-    //                 'id' => $transaction->id,
-    //                 'order_id' => $transaction->order_id,
-    //                 'customer' => $transaction->user ? $transaction->user->first_name . ' ' . $transaction->user->last_name : 'Guest',
-    //                 'amount' => $transaction->total_amount,
-    //                 'status' => $transaction->status,
-    //                 'time_ago' => $transaction->created_at->diffForHumans()
-    //             ];
-    //         })->toArray();
-    // }
-
-    // private function fetchAverageDailyRevenueData()
-    // {
-    //     $dailyAverages = Transaction::where('status', 'completed')
-    //         ->select(
-    //             DB::raw('AVG(total_amount) as average_revenue'),
-    //             DB::raw('DAYOFWEEK(created_at) as day_of_week')
-    //         )
-    //         ->groupBy('day_of_week')
-    //         ->get();
-
-    //     $chartData = [
-    //         1 => ['day' => 'Mon', 'average' => 0],
-    //         2 => ['day' => 'Tue', 'average' => 0],
-    //         3 => ['day' => 'Wed', 'average' => 0],
-    //         4 => ['day' => 'Thu', 'average' => 0],
-    //         5 => ['day' => 'Fri', 'average' => 0],
-    //         6 => ['day' => 'Sat', 'average' => 0],
-    //         7 => ['day' => 'Sun', 'average' => 0],
-    //     ];
-
-    //     foreach ($dailyAverages as $data) {
-    //         $dbDay = $data->day_of_week;
-    //         $mappedDay = $dbDay == 1 ? 7 : $dbDay - 1;
-    //         $chartData[$mappedDay]['average'] = (float) $data->average_revenue;
-    //     }
-
-    //     return array_values($chartData);
-    // }
-
     // =========================================================================
     // MASTER ENDPOINT (SOLUSI ERROR MAX_USER_CONNECTIONS)
     // =========================================================================
     public function getDashboardMasterData(C45Service $c45Service)
     {
-        // Hanya menggunakan 1 koneksi database untuk mengambil semua data ini
         return response()->json([
             'stats'           => $this->fetchStatsData(),
             'revenue'         => $this->fetchRevenueChartData(),
@@ -264,8 +25,6 @@ class DashboardController extends Controller
             'predicted'       => $this->fetchPredictedBestsellersData($c45Service),
             'activities'      => $this->fetchRecentActivitiesData(),
             'daily'           => $this->fetchAverageDailyRevenueData(),
-
-            // [BARU] 3 Data Analitik Tambahan
             'returned'        => $this->fetchMostReturnedProducts(),
             'peak_hours'      => $this->fetchPeakOrderHours(),
             'top_affiliators' => $this->fetchTopAffiliators(),
@@ -273,7 +32,7 @@ class DashboardController extends Controller
     }
 
     // =========================================================================
-    // PRIVATE HELPER METHODS (MENGEMBALIKAN ARRAY, BUKAN JSON RESPONSE)
+    // PRIVATE HELPER METHODS
     // =========================================================================
 
     private function fetchStatsData()
@@ -327,8 +86,9 @@ class DashboardController extends Controller
                 DB::raw("DATE_FORMAT(created_at, '%b') as month"),
                 DB::raw('MONTH(created_at) as month_num')
             )
-            ->groupBy('month', 'month_num')
-            ->orderBy('month_num', 'ASC')
+            // [PERBAIKAN] Menggunakan groupByRaw agar aman dari MySQL Strict Mode
+            ->groupByRaw("DATE_FORMAT(created_at, '%b'), MONTH(created_at)")
+            ->orderByRaw("MONTH(created_at) ASC")
             ->get()
             ->toArray();
     }
@@ -346,15 +106,14 @@ class DashboardController extends Controller
 
     private function fetchPredictedBestsellersData(C45Service $c45Service)
     {
+        // [PERBAIKAN] Kembali menggunakan withSum() karena jauh lebih aman
+        // dari error MySQL ONLY_FULL_GROUP_BY daripada menggunakan JOIN manual.
         $products = Product::with('category')
-            ->select('products.*', DB::raw('COALESCE(SUM(transaction_details.quantity), 0) as total_sold'))
-            ->leftJoin('transaction_details', 'products.id', '=', 'transaction_details.product_id')
-            ->leftJoin('transactions', function ($join) {
-                $join->on('transaction_details.transaction_id', '=', 'transactions.id')
-                    ->where('transactions.status', '=', 'completed');
-            })
-            ->where('products.status', 'active')
-            ->groupBy('products.id')
+            ->withSum(['transactionDetails as total_sold' => function ($query) {
+                $query->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
+                    ->where('transactions.status', 'completed');
+            }], 'quantity')
+            ->where('status', 'active')
             ->get();
 
         if ($products->isEmpty()) {
@@ -398,7 +157,11 @@ class DashboardController extends Controller
         $formatImageUrl = function($imagePath) {
             if (!$imagePath) return '';
             if (str_starts_with($imagePath, 'http')) return $imagePath;
-            $baseUrlFixed = str_replace('/api', '', env('APP_URL', 'https://back.solher.co.id'));
+
+            // [PERBAIKAN FATAL ERROR] Menggunakan config() alih-alih env()
+            $appUrl = config('app.url') ? config('app.url') : 'https://back.solher.co.id';
+            $baseUrlFixed = str_replace('/api', '', $appUrl);
+
             return $baseUrlFixed . '/storage/' . $imagePath;
         };
 
@@ -435,7 +198,7 @@ class DashboardController extends Controller
                     'id' => $prod ? $prod->id : random_int(1000, 9999),
                     'name' => $item['name'],
                     'image' => $prod ? $formatImageUrl($prod->image) : '',
-                    'reasons' => "Historical Best: Sold " . $item['total_sold'] . " units (Fallback Mode).",
+                    'reasons' => "Historical Best: Sold " . ($item['total_sold'] ?? 0) . " units (Fallback Mode).",
                     'label' => 'Historical Best',
                     'color' => 'text-blue-600',
                     'score' => max(60, $dynamicScore)
@@ -477,7 +240,8 @@ class DashboardController extends Controller
                 DB::raw('AVG(total_amount) as average_revenue'),
                 DB::raw('DAYOFWEEK(created_at) as day_of_week')
             )
-            ->groupBy('day_of_week')
+            // [PERBAIKAN] Memastikan groupBy menggunakan Raw Expression
+            ->groupByRaw('DAYOFWEEK(created_at)')
             ->get();
 
         $chartData = [
@@ -500,23 +264,23 @@ class DashboardController extends Controller
     }
 
     // =========================================================================
-    // [BARU] FUNGSI ANALITIK TAMBAHAN
+    // FUNGSI ANALITIK TAMBAHAN
     // =========================================================================
 
-    // 1. Mendapatkan daftar produk yang paling sering dikembalikan (Retur / Refund)
     private function fetchMostReturnedProducts()
     {
         return TransactionDetail::select('products.name', 'products.image', DB::raw('SUM(transaction_details.quantity) as total_returned'))
             ->join('products', 'products.id', '=', 'transaction_details.product_id')
             ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
-            // Hitung berdasarkan status gagal/retur
             ->whereIn('transactions.status', ['refund_requested', 'refund_approved', 'refunded', 'returned', 'issues'])
             ->groupBy('products.name', 'products.image')
             ->orderBy('total_returned', 'DESC')
             ->limit(5)
             ->get()
             ->map(function ($item) {
-                $baseUrlFixed = str_replace('/api', '', env('APP_URL', 'https://back.solher.co.id'));
+                // [PERBAIKAN FATAL ERROR]
+                $appUrl = config('app.url') ? config('app.url') : 'https://back.solher.co.id';
+                $baseUrlFixed = str_replace('/api', '', $appUrl);
                 $imgUrl = $item->image && !str_starts_with($item->image, 'http') ? $baseUrlFixed . '/storage/' . $item->image : $item->image;
 
                 return [
@@ -528,21 +292,20 @@ class DashboardController extends Controller
             ->toArray();
     }
 
-    // 2. Mendapatkan Jam Puncak Pesanan Masuk (Peak Order Hours)
     private function fetchPeakOrderHours()
     {
         $hourlyData = Transaction::select(
                 DB::raw('HOUR(created_at) as hour'),
                 DB::raw('COUNT(id) as total_orders')
             )
-            ->groupBy('hour')
-            ->orderBy('hour', 'ASC')
+            // [PERBAIKAN] Menggunakan groupByRaw agar aman di MySQL server
+            ->groupByRaw('HOUR(created_at)')
+            ->orderByRaw('HOUR(created_at) ASC')
             ->get()
             ->keyBy('hour')
             ->toArray();
 
         $formatted = [];
-        // Loop 24 jam agar chart menampilkan kurva lengkap dari 00:00 s.d. 23:00
         for ($i = 0; $i < 24; $i++) {
             $formatted[] = [
                 'hour' => str_pad($i, 2, '0', STR_PAD_LEFT) . ':00',
@@ -553,7 +316,6 @@ class DashboardController extends Controller
         return $formatted;
     }
 
-    // 3. Customer / Affiliator dengan Total Belanja Terbesar
     private function fetchTopAffiliators()
     {
         return Transaction::select('users.first_name', 'users.last_name', 'users.email', 'users.profile_image', 'users.usertype', DB::raw('SUM(transactions.total_amount) as total_generated'), DB::raw('COUNT(transactions.id) as total_orders'))
