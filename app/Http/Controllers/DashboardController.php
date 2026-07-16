@@ -954,11 +954,11 @@ class DashboardController extends Controller
 
     private function fetchMostReturnedProducts()
     {
-        return TransactionDetail::select('products.name', 'products.image', DB::raw('SUM(transaction_details.quantity) as total_returned'))
+        return TransactionDetail::select('products.name', 'products.image_url', DB::raw('SUM(transaction_details.quantity) as total_returned'))
             ->join('products', 'products.id', '=', 'transaction_details.product_id')
             ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
             ->whereIn('transactions.status', ['refund_requested', 'refund_approved', 'refunded', 'returned', 'issues'])
-            ->groupBy('products.name', 'products.image')
+            ->groupBy('products.name', 'products.image_url')
             ->orderBy('total_returned', 'DESC')
             ->limit(5)
             ->get()
