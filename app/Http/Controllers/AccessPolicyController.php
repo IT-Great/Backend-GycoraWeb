@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 
 class AccessPolicyController extends Controller
 {
+    // Kita simpan konfigurasinya di storage/app/access_policies.json
     private $filePath = 'access_policies.json';
 
     public function index()
