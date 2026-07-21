@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\ResetPasswordCodeMail;
 use App\Models\User;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use App\Mail\ResetPasswordCodeMail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -730,7 +730,7 @@ class AuthController extends Controller
         // Cek success dan pastikan score (skor keamanan bot) >= 0.5
         // Score 1.0 (Pasti Manusia), 0.0 (Pasti Bot)
         if (isset($result['success']) && $result['success'] == true) {
-             if (isset($result['score']) && $result['score'] >= 0.5) {
+             if (isset($result['score']) && $result['score'] >= 0.3) {
                  return true;
              }
         }

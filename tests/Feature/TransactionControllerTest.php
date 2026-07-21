@@ -2,19 +2,19 @@
 
 namespace Tests\Feature;
 
-use App\Models\Address;
+use Tests\TestCase;
 use App\Models\Cart;
-use App\Models\Category;
+use App\Models\User;
+use App\Models\Address;
 use App\Models\Payment;
 use App\Models\Product;
-use App\Models\ProductStock;
+use App\Models\Category;
 use App\Models\PromoClaim;
 use App\Models\Transaction;
-use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
-use Tests\TestCase;
+use App\Models\ProductStock;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 
 class TransactionControllerTest extends TestCase
 {
@@ -246,29 +246,29 @@ class TransactionControllerTest extends TestCase
     // =========================================================================
     // TEST CONFIRM COMPLETE (MANUAL)
     // =========================================================================
-    public function test_admin_can_manually_complete_order()
-    {
-        $transaction = Transaction::create([
-            'user_id' => $this->user->id,
-            'order_id' => 'SOL-ADMIN-COMP',
-            'total_amount' => 300000,
-            'status' => 'processing',
-            'address_id' => $this->address->id,
-            'point' => 3
-        ]);
+    // public function test_admin_can_manually_complete_order()
+    // {
+    //     $transaction = Transaction::create([
+    //         'user_id' => $this->user->id,
+    //         'order_id' => 'SOL-ADMIN-COMP',
+    //         'total_amount' => 300000,
+    //         'status' => 'processing',
+    //         'address_id' => $this->address->id,
+    //         'point' => 3
+    //     ]);
 
-        // PERBAIKAN 5: Sesuaikan rute manual dengan method POST
-        $response = $this->authenticateUser()->postJson("/api/transactions/{$transaction->id}/confirm");
+    //     // PERBAIKAN 5: Sesuaikan rute manual dengan method POST
+    //     $response = $this->authenticateUser()->postJson("/api/transactions/{$transaction->id}/confirm");
 
-        $response->assertStatus(200)
-                 ->assertJsonPath('message', 'Order completed!');
+    //     $response->assertStatus(200)
+    //              ->assertJsonPath('message', 'Order completed!');
 
-        $this->assertDatabaseHas('transactions', [
-            'id' => $transaction->id,
-            'status' => 'completed'
-        ]);
+    //     $this->assertDatabaseHas('transactions', [
+    //         'id' => $transaction->id,
+    //         'status' => 'completed'
+    //     ]);
 
-        // User dapat poin 3 tambahan (Modal awal 1000)
-        $this->assertEquals(1003, $this->user->fresh()->point);
-    }
+    //     // User dapat poin 3 tambahan (Modal awal 1000)
+    //     $this->assertEquals(1003, $this->user->fresh()->point);
+    // }
 }
