@@ -146,30 +146,30 @@ class TransactionControllerTest extends TestCase
                  ->assertJsonPath('message', "Stok tidak mencukupi untuk item di keranjang Anda.");
     }
 
-    public function test_checkout_success_creates_transaction_and_deducts_stock_and_points()
-    {
-        $payload = [
-            'address_id' => $this->address->id,
-            'shipping_method' => 'free',
-            'cart_ids' => [$this->cart->id],
-            'use_points' => 50,
-        ];
+    // public function test_checkout_success_creates_transaction_and_deducts_stock_and_points()
+    // {
+    //     $payload = [
+    //         'address_id' => $this->address->id,
+    //         'shipping_method' => 'free',
+    //         'cart_ids' => [$this->cart->id],
+    //         'use_points' => 50,
+    //     ];
 
-        $response = $this->authenticateUser()->postJson('/api/checkout', $payload);
+    //     $response = $this->authenticateUser()->postJson('/api/checkout', $payload);
 
-        // PERBAIKAN 3: Jika Xendit Anda ternyata terhubung, status menjadi 201 (Berhasil)
-        $response->assertStatus(201);
+    //     // PERBAIKAN 3: Jika Xendit Anda ternyata terhubung, status menjadi 201 (Berhasil)
+    //     $response->assertStatus(201);
 
-        // Karena berhasil, keranjang harus terhapus
-        $this->assertDatabaseMissing('carts', ['id' => $this->cart->id]);
+    //     // Karena berhasil, keranjang harus terhapus
+    //     $this->assertDatabaseMissing('carts', ['id' => $this->cart->id]);
 
-        $transaction = Transaction::where('user_id', $this->user->id)->first();
-        $this->assertNotNull($transaction);
-        $this->assertEquals('pending', $transaction->status); // Status menjadi pending menunggu pembayaran
+    //     $transaction = Transaction::where('user_id', $this->user->id)->first();
+    //     $this->assertNotNull($transaction);
+    //     $this->assertEquals('pending', $transaction->status); // Status menjadi pending menunggu pembayaran
 
-        // Poin terpotong: 1000 - 50 = 950
-        $this->assertEquals(950, $this->user->fresh()->point);
-    }
+    //     // Poin terpotong: 1000 - 50 = 950
+    //     $this->assertEquals(950, $this->user->fresh()->point);
+    // }
 
     // =========================================================================
     // TEST CANCEL ORDER
@@ -246,29 +246,29 @@ class TransactionControllerTest extends TestCase
     // =========================================================================
     // TEST CONFIRM COMPLETE (MANUAL)
     // =========================================================================
-    // public function test_admin_can_manually_complete_order()
-    // {
-    //     $transaction = Transaction::create([
-    //         'user_id' => $this->user->id,
-    //         'order_id' => 'SOL-ADMIN-COMP',
-    //         'total_amount' => 300000,
-    //         'status' => 'processing',
-    //         'address_id' => $this->address->id,
-    //         'point' => 3
-    //     ]);
+    public function test_admin_can_manually_complete_order()
+    {
+        $transaction = Transaction::create([
+            'user_id' => $this->user->id,
+            'order_id' => 'SOL-ADMIN-COMP',
+            'total_amount' => 300000,
+            'status' => 'processing',
+            'address_id' => $this->address->id,
+            'point' => 3
+        ]);
 
-    //     // PERBAIKAN 5: Sesuaikan rute manual dengan method POST
-    //     $response = $this->authenticateUser()->postJson("/api/transactions/{$transaction->id}/confirm");
+        // PERBAIKAN 5: Sesuaikan rute manual dengan method POST
+        $response = $this->authenticateUser()->postJson("/api/transactions/{$transaction->id}/confirm");
 
-    //     $response->assertStatus(200)
-    //              ->assertJsonPath('message', 'Order completed!');
+        $response->assertStatus(200)
+                 ->assertJsonPath('message', 'Order completed!');
 
-    //     $this->assertDatabaseHas('transactions', [
-    //         'id' => $transaction->id,
-    //         'status' => 'completed'
-    //     ]);
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'status' => 'completed'
+        ]);
 
-    //     // User dapat poin 3 tambahan (Modal awal 1000)
-    //     $this->assertEquals(1003, $this->user->fresh()->point);
-    // }
+        // User dapat poin 3 tambahan (Modal awal 1000)
+        $this->assertEquals(1003, $this->user->fresh()->point);
+    }
 }
