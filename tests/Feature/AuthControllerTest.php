@@ -26,6 +26,14 @@ class AuthControllerTest extends TestCase
     {
         parent::setUp();
 
+        // [BARIS TAMBAHAN]: Memalsukan respons Google reCAPTCHA agar lolos validasi
+        \Illuminate\Support\Facades\Http::fake([
+            'https://www.google.com/recaptcha/api/siteverify' => \Illuminate\Support\Facades\Http::response([
+                'success' => true,
+                'score' => 0.9 // Skor tinggi, pasti dianggap bukan bot
+            ], 200)
+        ]);
+
         // 1. Setup User Biasa
         $this->user = User::create([
             'first_name' => 'Regular',

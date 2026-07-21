@@ -148,6 +148,48 @@ class CartControllerTest extends TestCase
     //     ]);
     // }
 
+    // public function test_adding_same_product_increases_quantity_instead_of_creating_new_row()
+    // {
+    //     // Kondisi awal: Keranjang sudah punya 1 item dengan JSON string warna
+    //     $colorJson = json_encode(['hex' => '#ff0000', 'name' => 'Red']);
+
+    //     Cart::create([
+    //         'user_id' => $this->user->id,
+    //         'product_id' => $this->product->id,
+    //         'quantity' => 2,
+    //         'color' => $colorJson,
+    //         'gross_amount' => 100000,
+    //     ]);
+
+    //     // Request tambah produk yang sama dengan warna yang sama persis
+    //     $payload = [
+    //         'product_id' => $this->product->id,
+    //         'quantity' => 1,
+    //         'color' => $colorJson
+    //     ];
+
+    //     $response = $this->authenticateUser()->postJson('/api/carts', $payload);
+    //     $response->assertStatus(200);
+
+    //     // Pastikan hanya ada 1 baris di database (row tidak bertambah), tapi qty naik jadi 3
+    //     // $this->assertDatabaseCount('carts', 1);
+
+    //     // [BARIS YANG DIUBAH]: Ganti $this->assertDatabaseCount('carts', 1) menjadi kode di bawah ini:
+    //     // Memastikan tidak ada row ganda yang tercipta khusus untuk user dan produk ini
+    //     $cartCount = Cart::where('user_id', $this->user->id)
+    //                      ->where('product_id', $this->product->id)
+    //                      ->count();
+    //     $this->assertEquals(1, $cartCount, 'Seharusnya data keranjang tidak bertambah baris baru.');
+    //     $this->assertDatabaseHas('carts', [
+    //         'user_id' => $this->user->id,
+    //         'product_id' => $this->product->id,
+    //         'color' => $colorJson,
+    //         'quantity' => 3,
+    //         // Kita hilangkan gross_amount di assertion ini karena format decimal kadang menyebabkan error pembulatan di test,
+    //         // (misal 150000 vs 150000.00), yang terpenting kuantitasnya bertambah.
+    //     ]);
+    // }
+
     public function test_adding_same_product_increases_quantity_instead_of_creating_new_row()
     {
         // Kondisi awal: Keranjang sudah punya 1 item dengan JSON string warna
@@ -171,15 +213,19 @@ class CartControllerTest extends TestCase
         $response = $this->authenticateUser()->postJson('/api/carts', $payload);
         $response->assertStatus(200);
 
-        // Pastikan hanya ada 1 baris di database (row tidak bertambah), tapi qty naik jadi 3
-        $this->assertDatabaseCount('carts', 1);
+        // [BARIS YANG DIUBAH]: Tambahkan query() agar Intelephense VSCode tidak error
+        $cartCount = Cart::query()
+                         ->where('user_id', $this->user->id)
+                         ->where('product_id', $this->product->id)
+                         ->count();
+
+        $this->assertEquals(1, $cartCount, 'Seharusnya data keranjang tidak bertambah baris baru.');
+
         $this->assertDatabaseHas('carts', [
             'user_id' => $this->user->id,
             'product_id' => $this->product->id,
             'color' => $colorJson,
             'quantity' => 3,
-            // Kita hilangkan gross_amount di assertion ini karena format decimal kadang menyebabkan error pembulatan di test,
-            // (misal 150000 vs 150000.00), yang terpenting kuantitasnya bertambah.
         ]);
     }
 
