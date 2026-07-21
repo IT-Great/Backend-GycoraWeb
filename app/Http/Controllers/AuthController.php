@@ -713,27 +713,81 @@ class AuthController extends Controller
     }
 
     // Helper reCAPTCHA v3
+    // private function verifyRecaptcha($token)
+    // {
+    //     // Hindari verifikasi jika sedang di environment testing
+    //     if (app()->environment('testing')) return true;
+    //     if (!$token) return false;
+
+    //     $secretKey = env('RECAPTCHA_SECRET_KEY'); // Pastikan ini ada di .env Laravel
+    //     $response = \Illuminate\Support\Facades\Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+    //         'secret' => $secretKey,
+    //         'response' => $token,
+    //     ]);
+
+    //     $result = $response->json();
+
+    //     // Cek success dan pastikan score (skor keamanan bot) >= 0.5
+    //     // Score 1.0 (Pasti Manusia), 0.0 (Pasti Bot)
+    //     if (isset($result['success']) && $result['success'] == true) {
+    //          if (isset($result['score']) && $result['score'] >= 0.5) {
+    //              return true;
+    //          }
+    //     }
+    //     return false;
+    // }
+
+    // Helper reCAPTCHA v3
     private function verifyRecaptcha($token)
     {
         // Hindari verifikasi jika sedang di environment testing
-        if (app()->environment('testing')) return true;
-        if (!$token) return false;
+        if (app()->environment('testing')) {
+            Log::info('reCAPTCHA dibypass karena environment testing.');
+            return true;
+        }
 
-        $secretKey = env('RECAPTCHA_SECRET_KEY'); // Pastikan ini ada di .env Laravel
-        $response = \Illuminate\Support\Facades\Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
-            'secret' => $secretKey,
-            'response' => $token,
+        if (!$token) {
+            Log::warning('reCAPTCHA GAGAL: Token kosong atau tidak dikirim dari Frontend.');
+            return false;
+        }
+
+        $secretKey = env('RECAPTCHA_SECRET_KEY');
+
+        Log::info('Memulai verifikasi reCAPTCHA', [
+            'token_length' => strlen($token), // Kita log panjangnya saja untuk memastikan token benar-benar masuk
+            'secret_key_exists' => !empty($secretKey) // Memastikan secret key terbaca dari .env
         ]);
 
-        $result = $response->json();
+        try {
+            $response = \Illuminate\Support\Facades\Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret' => $secretKey,
+                'response' => $token,
+            ]);
 
-        // Cek success dan pastikan score (skor keamanan bot) >= 0.5
-        // Score 1.0 (Pasti Manusia), 0.0 (Pasti Bot)
-        if (isset($result['success']) && $result['success'] == true) {
-             if (isset($result['score']) && $result['score'] >= 0.3) {
-                 return true;
-             }
+            $result = $response->json();
+
+            // 🌟 INI LOG YANG PALING PENTING 🌟
+            // Ini akan mencetak keseluruhan balasan dari Google, termasuk error-codes jika ada
+            Log::info('HASIL RESPONSE GOOGLE reCAPTCHA:', $result);
+
+            // Cek success dan pastikan score (skor keamanan bot) >= 0.5
+            if (isset($result['success']) && $result['success'] == true) {
+                 if (isset($result['score']) && $result['score'] >= 0.5) {
+                     Log::info('reCAPTCHA BERHASIL: Skor memenuhi syarat (' . $result['score'] . ')');
+                     return true;
+                 } else {
+                     Log::warning('reCAPTCHA DITOLAK: Terdeteksi sebagai Bot. Skor terlalu rendah: ' . ($result['score'] ?? 'Tidak ada skor'));
+                 }
+            } else {
+                Log::warning('reCAPTCHA GAGAL: Google merespons success = false', [
+                    'error_codes' => $result['error-codes'] ?? 'Tidak ada pesan error spesifik'
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Log jika server Anda gagal menghubungi server Google (misal: koneksi terputus)
+            Log::error('reCAPTCHA ERROR KONEKSI: ' . $e->getMessage());
         }
+
         return false;
     }
 }
