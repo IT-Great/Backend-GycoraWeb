@@ -14,6 +14,34 @@ class CartController extends Controller
     // =========================================================================
     // HELPER: SINKRONISASI HARGA DINAMIS BERDASARKAN MOQ
     // =========================================================================
+    // private function syncCartPrices($user)
+    // {
+    //     // 1. Ambil seluruh isi keranjang user beserta relasi produknya
+    //     $carts = $user->carts()->with('product')->get();
+
+    //     // 2. Hitung Total QTY yang ada di keranjang
+    //     $totalCartQty = $carts->sum('quantity');
+    //     $isReseller = $user->usertype === 'reseller';
+
+    //     // 3. Update kembali seluruh gross_amount di database agar akurat dengan UI
+    //     foreach ($carts as $cart) {
+    //         $priceToUse = $cart->product->price;
+
+    //         if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
+    //             $priceToUse = $cart->product->wholesale_price;
+    //         } elseif ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
+    //             $priceToUse = $cart->product->discount_price;
+    //         }
+
+    //         $cart->update([
+    //             'gross_amount' => $priceToUse * $cart->quantity
+    //         ]);
+    //     }
+    // }
+
+    // =========================================================================
+    // HELPER: SINKRONISASI HARGA DINAMIS BERDASARKAN MOQ & BUNDLE
+    // =========================================================================
     private function syncCartPrices($user)
     {
         // 1. Ambil seluruh isi keranjang user beserta relasi produknya
@@ -23,12 +51,34 @@ class CartController extends Controller
         $totalCartQty = $carts->sum('quantity');
         $isReseller = $user->usertype === 'reseller';
 
-        // 3. Update kembali seluruh gross_amount di database agar akurat dengan UI
+        // 3. Cek apakah promo Bundle masih berlaku (Sampai 20 Agustus 2026 Pukul 23:59 WIB)
+        $isBundlePeriod = \Carbon\Carbon::now()->timezone('Asia/Jakarta')
+                            ->lte(\Carbon\Carbon::parse('2026-08-20 23:59:59', 'Asia/Jakarta'));
+
+        // 4. Cek syarat bundle: Apakah ada minimal 1 produk yang kodenya TIDAK berawalan EGB?
+        $hasNonEgbProduct = false;
+        foreach ($carts as $cart) {
+            if (!str_starts_with($cart->product->sku, 'EGB')) {
+                $hasNonEgbProduct = true;
+                break;
+            }
+        }
+
+        // 5. Update kembali seluruh gross_amount di database agar akurat dengan UI
         foreach ($carts as $cart) {
             $priceToUse = $cart->product->price;
+            $sku = $cart->product->sku;
 
+            // Prioritas Harga: Harga Grosir (Reseller) > Harga Bundle > Harga Diskon Standar
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
                 $priceToUse = $cart->product->wholesale_price;
+            } elseif ($isBundlePeriod && $hasNonEgbProduct && in_array($sku, ['EGB001', 'EGB002'])) {
+                // Terapkan Bundle Price
+                if ($sku === 'EGB001') {
+                    $priceToUse = 299000;
+                } elseif ($sku === 'EGB002') {
+                    $priceToUse = 309000;
+                }
             } elseif ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
                 $priceToUse = $cart->product->discount_price;
             }
