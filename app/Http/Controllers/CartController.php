@@ -156,7 +156,7 @@ use Carbon\Carbon;
 class CartController extends Controller
 {
     // =========================================================================
-    // HELPER: SINKRONISASI HARGA DINAMIS (MEMAKAI SISTEM PAIRING UNTUK BUNDLE)
+    // HELPER: SINKRONISASI HARGA DINAMIS (UNIVERSAL BUNDLE POOL)
     // =========================================================================
     private function syncCartPrices($user)
     {
@@ -165,30 +165,44 @@ class CartController extends Controller
         $isReseller = $user->usertype === 'reseller';
 
         $bundlePool = [];
-        $cartUpdates = []; // Simpan gross_amount akhir untuk tiap cart id
+        $cartUpdates = [];
 
-        // 1. Loop pertama: Filter harga normal/diskon/grosir, pisahkan item bundle ke dalam 'Pool'
         foreach ($carts as $cart) {
+            // Inisialisasi awal nilai 0 agar update += berjalan mulus
+            if (!isset($cartUpdates[$cart->id])) {
+                $cartUpdates[$cart->id] = 0;
+            }
+
             $priceToUse = $cart->product->price;
 
-            // Cek Diskon normal
+            // Diskon Normal
             if ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
                 $priceToUse = $cart->product->discount_price;
             }
 
-            // Jika Reseller dan kuantitas mencapai Grosir, lompati logika bundle sama sekali
+            // Reseller bypass bundle
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
-                $cartUpdates[$cart->id] = $cart->product->wholesale_price * $cart->quantity;
+                $cartUpdates[$cart->id] += $cart->product->wholesale_price * $cart->quantity;
                 continue;
             }
 
-            // Cek validasi bundle
-            $isBundleValid = $cart->product->is_bundle_active &&
-                             (!$cart->product->bundle_end_date || Carbon::parse($cart->product->bundle_end_date)->isFuture()) &&
-                             $cart->product->bundle_price > 0;
+            // Validasi keabsahan status bundle anti-error
+            $isBundleActiveFlag = in_array($cart->product->is_bundle_active, [1, '1', true], true);
+            
+            $dateStr = $cart->product->bundle_end_date;
+            $isValidDate = true;
+            if (!empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
+                try {
+                    $isValidDate = Carbon::parse($dateStr)->isFuture();
+                } catch (\Exception $e) {
+                    $isValidDate = false; // Tangani jika string date rusak di DB
+                }
+            }
+
+            $isBundleValid = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
 
             if ($isBundleValid) {
-                // Sebarkan ke pool untuk "dipasangkan" (1 per 1 kuantitas)
+                // Sebarkan qty produk ke dalam satu kolam universal
                 for ($i = 0; $i < $cart->quantity; $i++) {
                     $bundlePool[] = [
                         'cart_id'      => $cart->id,
@@ -197,41 +211,41 @@ class CartController extends Controller
                     ];
                 }
             } else {
-                // Item biasa langsung diset total gross_amount nya
-                $cartUpdates[$cart->id] = $priceToUse * $cart->quantity;
+                $cartUpdates[$cart->id] += $priceToUse * $cart->quantity;
             }
         }
 
-        // 2. Jika ada item bundle, pasangkan per-2pcs
+        // Proses pencarian Pasangan dari kolam universal
         if (!empty($bundlePool)) {
-            // Kelompokkan pool berdasarkan nilai bundle_price-nya untuk menghindari error silang antar promo bundle
-            $groupedBundles = collect($bundlePool)->groupBy('bundle_price');
+            // Urutkan dari harga bundle terbesar agar user dapat diskon maksimal
+            usort($bundlePool, function($a, $b) {
+                return $b['bundle_price'] <=> $a['bundle_price'];
+            });
 
-            foreach ($groupedBundles as $bundlePrice => $items) {
-                $totalItems = count($items);
-                $pairs = floor($totalItems / 2); // Jumlah pasangan bundle
-                $pricePerItemInBundle = $bundlePrice / 2; // Jika bundle 299.000, tiap kepingnya dinilai 149.500
+            $totalItems = count($bundlePool);
+            $pairs = floor($totalItems / 2);
 
-                $itemIndex = 0;
-                foreach ($items as $item) {
-                    $cartId = $item['cart_id'];
-                    
-                    if (!isset($cartUpdates[$cartId])) {
-                        $cartUpdates[$cartId] = 0;
-                    }
+            // Kawinkan pasangan (apapun tipe itemnya asalkan dia is_bundle_active)
+            for ($i = 0; $i < $pairs; $i++) {
+                $item1 = $bundlePool[$i * 2];
+                $item2 = $bundlePool[$i * 2 + 1];
 
-                    // Jika item ini masuk kuota pasangan, beri harga paruhan bundle, jika jomblo beri harga aslinya
-                    if ($itemIndex < $pairs * 2) {
-                        $cartUpdates[$cartId] += $pricePerItemInBundle;
-                    } else {
-                        $cartUpdates[$cartId] += $item['normal_price'];
-                    }
-                    $itemIndex++;
-                }
+                // Ambil patokan harga bundle tertinggi di antara keduanya
+                $pairPrice = max($item1['bundle_price'], $item2['bundle_price']);
+                $halfPrice = $pairPrice / 2;
+
+                $cartUpdates[$item1['cart_id']] += $halfPrice;
+                $cartUpdates[$item2['cart_id']] += $halfPrice;
+            }
+
+            // Bayar harga normal untuk produk jomblo / sisa yang tak dapat pasangan
+            for ($i = $pairs * 2; $i < $totalItems; $i++) {
+                $unpairedItem = $bundlePool[$i];
+                $cartUpdates[$unpairedItem['cart_id']] += $unpairedItem['normal_price'];
             }
         }
 
-        // 3. Simpan massal ke database
+        // Simpan pembaruan total harga ke DB
         foreach ($cartUpdates as $cartId => $grossAmount) {
             Cart::where('id', $cartId)->update(['gross_amount' => $grossAmount]);
         }
