@@ -168,26 +168,24 @@ class CartController extends Controller
         $cartUpdates = [];
 
         foreach ($carts as $cart) {
-            // Inisialisasi awal nilai 0 agar update += berjalan mulus
             if (!isset($cartUpdates[$cart->id])) {
                 $cartUpdates[$cart->id] = 0;
             }
 
             $priceToUse = $cart->product->price;
 
-            // Diskon Normal
             if ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
                 $priceToUse = $cart->product->discount_price;
             }
 
-            // Reseller bypass bundle
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
                 $cartUpdates[$cart->id] += $cart->product->wholesale_price * $cart->quantity;
                 continue;
             }
 
-            // Validasi keabsahan status bundle anti-error
-            $isBundleActiveFlag = in_array($cart->product->is_bundle_active, [1, '1', true], true);
+            // PERBAIKAN: Cast string secara eksplisit agar kebal terhadap strict typing error
+            $isActiveStr = (string)$cart->product->is_bundle_active;
+            $isBundleActiveFlag = in_array($isActiveStr, ['1', 'true'], true);
             
             $dateStr = $cart->product->bundle_end_date;
             $isValidDate = true;
@@ -195,14 +193,13 @@ class CartController extends Controller
                 try {
                     $isValidDate = Carbon::parse($dateStr)->isFuture();
                 } catch (\Exception $e) {
-                    $isValidDate = false; // Tangani jika string date rusak di DB
+                    $isValidDate = false;
                 }
             }
 
             $isBundleValid = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
 
             if ($isBundleValid) {
-                // Sebarkan qty produk ke dalam satu kolam universal
                 for ($i = 0; $i < $cart->quantity; $i++) {
                     $bundlePool[] = [
                         'cart_id'      => $cart->id,
@@ -215,9 +212,7 @@ class CartController extends Controller
             }
         }
 
-        // Proses pencarian Pasangan dari kolam universal
         if (!empty($bundlePool)) {
-            // Urutkan dari harga bundle terbesar agar user dapat diskon maksimal
             usort($bundlePool, function($a, $b) {
                 return $b['bundle_price'] <=> $a['bundle_price'];
             });
@@ -225,12 +220,10 @@ class CartController extends Controller
             $totalItems = count($bundlePool);
             $pairs = floor($totalItems / 2);
 
-            // Kawinkan pasangan (apapun tipe itemnya asalkan dia is_bundle_active)
             for ($i = 0; $i < $pairs; $i++) {
                 $item1 = $bundlePool[$i * 2];
                 $item2 = $bundlePool[$i * 2 + 1];
 
-                // Ambil patokan harga bundle tertinggi di antara keduanya
                 $pairPrice = max($item1['bundle_price'], $item2['bundle_price']);
                 $halfPrice = $pairPrice / 2;
 
@@ -238,14 +231,12 @@ class CartController extends Controller
                 $cartUpdates[$item2['cart_id']] += $halfPrice;
             }
 
-            // Bayar harga normal untuk produk jomblo / sisa yang tak dapat pasangan
             for ($i = $pairs * 2; $i < $totalItems; $i++) {
                 $unpairedItem = $bundlePool[$i];
                 $cartUpdates[$unpairedItem['cart_id']] += $unpairedItem['normal_price'];
             }
         }
 
-        // Simpan pembaruan total harga ke DB
         foreach ($cartUpdates as $cartId => $grossAmount) {
             Cart::where('id', $cartId)->update(['gross_amount' => $grossAmount]);
         }
@@ -321,9 +312,7 @@ class CartController extends Controller
         $product = $cart->product;
 
         if ($validated['quantity'] > $product->stock) {
-            return response()->json([
-                'message' => 'Stock limited!'
-            ], 422);
+            return response()->json(['message' => 'Stock limited!'], 422);
         }
 
         $cart->update([
@@ -333,22 +322,17 @@ class CartController extends Controller
 
         $this->syncCartPrices($user);
 
-        return response()->json([
-            'message' => 'Cart updated successfully'
-        ]);
+        return response()->json(['message' => 'Cart updated successfully']);
     }
 
     public function destroy(Request $request, $id)
     {
         $user = $request->user();
         $cart = $user->carts()->findOrFail($id);
-
         $cart->delete();
 
         $this->syncCartPrices($user);
 
-        return response()->json([
-            'message' => 'Item removed'
-        ]);
+        return response()->json(['message' => 'Item removed']);
     }
 }
