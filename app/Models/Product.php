@@ -95,6 +95,10 @@ class Product extends Model
         'discount_prices',
         'wholesale_price', 'wholesale_prices',
         'voucher_discount_price', 'voucher_discount_prices',
+        'is_bundle_active', // <-- BARU
+        'bundle_price',     // <-- BARU
+        'bundle_prices',    // <-- BARU
+        'bundle_end_date',  // <-- BARU
         'stock',
         'image_url',
         'variant_images',
@@ -110,7 +114,11 @@ class Product extends Model
         'prices' => 'array',
         'discount_prices' => 'array',
         'wholesale_prices' => 'array',
+        'bundle_price' => 'decimal:2', // <-- BARU
         'voucher_discount_prices' => 'array',
+        'bundle_prices' => 'array', // <-- BARU
+        'is_bundle_active' => 'boolean', // <-- BARU
+        'bundle_end_date' => 'datetime', // <-- BARU
         'stock' => 'integer',
         'variant_images' => 'array',
         'color' => 'array',

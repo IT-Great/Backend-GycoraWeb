@@ -1061,6 +1061,11 @@ class ProductController extends Controller
             'wholesale_price' => 'nullable|numeric|min:0',
             'voucher_discount_price' => 'nullable|numeric|min:0',
 
+            // 👇 Validasi Bundle 👇
+            'is_bundle_active' => 'boolean',
+            'bundle_price' => 'nullable|numeric|min:0',
+            'bundle_end_date' => 'nullable|date',
+
             // 👇 Validasi Multi Currency 👇
             'prices' => 'nullable|array',
             'prices.*' => 'nullable|numeric|min:0',
@@ -1070,6 +1075,8 @@ class ProductController extends Controller
             'wholesale_prices.*' => 'nullable|numeric|min:0',
             'voucher_discount_prices' => 'nullable|array',
             'voucher_discount_prices.*' => 'nullable|numeric|min:0',
+            'bundle_prices' => 'nullable|array', // <-- BARU
+            'bundle_prices.*' => 'nullable|numeric|min:0', // <-- BARU
 
             'stock' => 'required|integer|min:0',
             'image_url' => 'nullable|string',
@@ -1090,11 +1097,16 @@ class ProductController extends Controller
                 $data['slug'] = Str::slug($data['name']);
             }
 
+            // Memastikan data Boolean dikonversi dengan benar
+            $data['is_bundle_active'] = filter_var($request->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
+
             // Tangani Array JSON jika kosong
             $data['prices'] = $request->input('prices', null);
             $data['discount_prices'] = $request->input('discount_prices', null);
             $data['wholesale_prices'] = $request->input('wholesale_prices', null); // 👇 Tambahkan ini
             $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null); // 👇 Tambahkan ini
+
+            $data['bundle_prices'] = $request->input('bundle_prices', null); // <-- BARU
 
             $product = Product::create($data);
 
@@ -1157,6 +1169,64 @@ class ProductController extends Controller
     //     return response()->json($product, 200);
     // }
 
+    // public function update(Request $request, $id)
+    // {
+    //     $product = Product::findOrFail($id);
+
+    //     $validator = Validator::make($request->all(), [
+    //         'category_id' => 'required|exists:categories,id',
+    //         'sku' => "required|unique:products,sku,$id",
+    //         'name' => 'required|string|max:255',
+    //         'description' => 'nullable|string',
+    //         'benefits' => 'nullable|string',
+    //         'price' => 'required|numeric|min:0',
+    //         'discount_price' => 'nullable|numeric|min:0',
+    //         'wholesale_price' => 'nullable|numeric|min:0',
+    //         'voucher_discount_price' => 'nullable|numeric|min:0',
+
+    //         // 👇 Validasi Multi Currency 👇
+    //         'prices' => 'nullable|array',
+    //         'prices.*' => 'nullable|numeric|min:0',
+    //         'discount_prices' => 'nullable|array',
+    //         'discount_prices.*' => 'nullable|numeric|min:0',
+
+    //         'wholesale_prices' => 'nullable|array',
+    //         'wholesale_prices.*' => 'nullable|numeric|min:0',
+    //         'voucher_discount_prices' => 'nullable|array',
+    //         'voucher_discount_prices.*' => 'nullable|numeric|min:0',
+
+    //         'image_url' => 'nullable|string',
+    //         'variant_video' => 'nullable|string',
+    //         'color' => 'nullable|array',
+    //         'status' => 'required|in:active,inactive',
+    //     ]);
+
+    //     if ($validator->fails()) {
+    //         return response()->json($validator->errors(), 422);
+    //     }
+
+    //     $data = $request->except(['stock', '_method']);
+
+    //     if ($request->has('name') && $request->name !== $product->name) {
+    //         $data['slug'] = Str::slug($request->name);
+    //     }
+
+    //     // Tangani Array JSON jika kosong
+    //     $data['prices'] = $request->input('prices', null);
+    //     $data['discount_prices'] = $request->input('discount_prices', null);
+    //     $data['wholesale_prices'] = $request->input('wholesale_prices', null);
+    //     $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null);
+
+    //     if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
+    //         $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
+    //         Storage::disk('s3')->delete($oldKey);
+    //     }
+
+    //     $product->update($data);
+
+    //     return response()->json($product, 200);
+    // }
+
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
@@ -1172,16 +1242,22 @@ class ProductController extends Controller
             'wholesale_price' => 'nullable|numeric|min:0',
             'voucher_discount_price' => 'nullable|numeric|min:0',
 
-            // 👇 Validasi Multi Currency 👇
+            // 👇 Validasi Bundle 👇
+            'is_bundle_active' => 'boolean',
+            'bundle_price' => 'nullable|numeric|min:0',
+            'bundle_end_date' => 'nullable|date',
+
+            // Validasi Multi Currency
             'prices' => 'nullable|array',
             'prices.*' => 'nullable|numeric|min:0',
             'discount_prices' => 'nullable|array',
             'discount_prices.*' => 'nullable|numeric|min:0',
-
             'wholesale_prices' => 'nullable|array',
             'wholesale_prices.*' => 'nullable|numeric|min:0',
             'voucher_discount_prices' => 'nullable|array',
             'voucher_discount_prices.*' => 'nullable|numeric|min:0',
+            'bundle_prices' => 'nullable|array', // <-- BARU
+            'bundle_prices.*' => 'nullable|numeric|min:0', // <-- BARU
 
             'image_url' => 'nullable|string',
             'variant_video' => 'nullable|string',
@@ -1199,11 +1275,14 @@ class ProductController extends Controller
             $data['slug'] = Str::slug($request->name);
         }
 
+        $data['is_bundle_active'] = filter_var($request->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
+
         // Tangani Array JSON jika kosong
         $data['prices'] = $request->input('prices', null);
         $data['discount_prices'] = $request->input('discount_prices', null);
         $data['wholesale_prices'] = $request->input('wholesale_prices', null);
         $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null);
+        $data['bundle_prices'] = $request->input('bundle_prices', null); // <-- BARU
 
         if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
             $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
