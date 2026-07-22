@@ -42,6 +42,56 @@ class CartController extends Controller
     // =========================================================================
     // HELPER: SINKRONISASI HARGA DINAMIS BERDASARKAN MOQ & BUNDLE
     // =========================================================================
+    // private function syncCartPrices($user)
+    // {
+    //     // 1. Ambil seluruh isi keranjang user beserta relasi produknya
+    //     $carts = $user->carts()->with('product')->get();
+
+    //     // 2. Hitung Total QTY yang ada di keranjang
+    //     $totalCartQty = $carts->sum('quantity');
+    //     $isReseller = $user->usertype === 'reseller';
+
+    //     // 3. Cek apakah promo Bundle masih berlaku (Sampai 20 Agustus 2026 Pukul 23:59 WIB)
+    //     $isBundlePeriod = \Carbon\Carbon::now()->timezone('Asia/Jakarta')
+    //                         ->lte(\Carbon\Carbon::parse('2026-08-20 23:59:59', 'Asia/Jakarta'));
+
+    //     // 4. Cek syarat bundle: Apakah ada minimal 1 produk yang kodenya TIDAK berawalan EGB?
+    //     $hasNonEgbProduct = false;
+    //     foreach ($carts as $cart) {
+    //         if (!str_starts_with($cart->product->sku, 'EGB')) {
+    //             $hasNonEgbProduct = true;
+    //             break;
+    //         }
+    //     }
+
+    //     // 5. Update kembali seluruh gross_amount di database agar akurat dengan UI
+    //     foreach ($carts as $cart) {
+    //         $priceToUse = $cart->product->price;
+    //         $sku = $cart->product->sku;
+
+    //         // Prioritas Harga: Harga Grosir (Reseller) > Harga Bundle > Harga Diskon Standar
+    //         if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
+    //             $priceToUse = $cart->product->wholesale_price;
+    //         } elseif ($isBundlePeriod && $hasNonEgbProduct && in_array($sku, ['EGB001', 'EGB002'])) {
+    //             // Terapkan Bundle Price
+    //             if ($sku === 'EGB001') {
+    //                 $priceToUse = 299000;
+    //             } elseif ($sku === 'EGB002') {
+    //                 $priceToUse = 309000;
+    //             }
+    //         } elseif ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
+    //             $priceToUse = $cart->product->discount_price;
+    //         }
+
+    //         $cart->update([
+    //             'gross_amount' => $priceToUse * $cart->quantity
+    //         ]);
+    //     }
+    // }
+
+    // =========================================================================
+    // HELPER: SINKRONISASI HARGA DINAMIS BERDASARKAN MOQ & BUNDLE
+    // =========================================================================
     private function syncCartPrices($user)
     {
         // 1. Ambil seluruh isi keranjang user beserta relasi produknya
@@ -64,23 +114,37 @@ class CartController extends Controller
             }
         }
 
-        // 5. Update kembali seluruh gross_amount di database agar akurat dengan UI
+        // 5. Update kembali seluruh gross_amount di database
         foreach ($carts as $cart) {
-            $priceToUse = $cart->product->price;
+            $basePrice = $cart->product->price;
             $sku = $cart->product->sku;
 
-            // Prioritas Harga: Harga Grosir (Reseller) > Harga Bundle > Harga Diskon Standar
+            // Ambil harga diskon murni jika ada
+            $discountPrice = ($cart->product->discount_price > 0 && $cart->product->discount_price < $basePrice)
+                                ? $cart->product->discount_price
+                                : $basePrice;
+
+            $bundlePrice = null;
+
+            // Gunakan str_starts_with agar varian seperti EGB001-BLK tetap terdeteksi
+            if ($isBundlePeriod && $hasNonEgbProduct) {
+                if (str_starts_with($sku, 'EGB001')) {
+                    $bundlePrice = 299000;
+                } elseif (str_starts_with($sku, 'EGB002')) {
+                    $bundlePrice = 309000;
+                }
+            }
+
+            // Penentuan Prioritas (Reseller > Bundle Termurah / Diskon)
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
                 $priceToUse = $cart->product->wholesale_price;
-            } elseif ($isBundlePeriod && $hasNonEgbProduct && in_array($sku, ['EGB001', 'EGB002'])) {
-                // Terapkan Bundle Price
-                if ($sku === 'EGB001') {
-                    $priceToUse = 299000;
-                } elseif ($sku === 'EGB002') {
-                    $priceToUse = 309000;
+            } else {
+                if ($bundlePrice !== null) {
+                    // Berikan harga paling murah antara Bundle vs Diskon Normal
+                    $priceToUse = min($bundlePrice, $discountPrice);
+                } else {
+                    $priceToUse = $discountPrice;
                 }
-            } elseif ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
-                $priceToUse = $cart->product->discount_price;
             }
 
             $cart->update([
