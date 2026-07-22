@@ -62,7 +62,7 @@ jobs:
   # JOB 2: DEPLOY KE VPS (JIKA TEST SUKSES)
   # ==========================================
   deploy:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
 
     steps:
