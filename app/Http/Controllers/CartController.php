@@ -145,16 +145,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Product;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class CartController extends Controller
 {
     // =========================================================================
-    // HELPER: SINKRONISASI HARGA DINAMIS (UNIVERSAL BUNDLE POOL)
+    // HELPER: SINKRONISASI HARGA DINAMIS (CROSS-CATEGORY BUNDLE SYSTEM)
     // =========================================================================
     private function syncCartPrices($user)
     {
@@ -162,35 +163,39 @@ class CartController extends Controller
         $totalCartQty = $carts->sum('quantity');
         $isReseller = $user->usertype === 'reseller';
 
-        $bundlePool = [];
+        $drivers = [];  // Kolam untuk Produk EGB yang Bundle Aktif
+        $partners = []; // Kolam untuk Semua Produk Non-EGB
         $cartUpdates = [];
 
         foreach ($carts as $cart) {
-            if (! isset($cartUpdates[$cart->id])) {
+            // Inisialisasi awal nilai array
+            if (!isset($cartUpdates[$cart->id])) {
                 $cartUpdates[$cart->id] = 0;
             }
 
             $priceToUse = $cart->product->price;
 
+            // Harga Diskon Reguler
             if ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
                 $priceToUse = $cart->product->discount_price;
             }
 
+            // Jika Reseller valid, bypass semua urusan promo bundle
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
                 $cartUpdates[$cart->id] += $cart->product->wholesale_price * $cart->quantity;
-
                 continue;
             }
 
-            // PERBAIKAN: Cast string secara eksplisit agar kebal terhadap strict typing error
-            // $isActiveStr = (string)$cart->product->is_bundle_active;
-            // $isBundleActiveFlag = in_array($isActiveStr, ['1', 'true'], true);
+            // Identifikasi apakah barang ini EGB (Cross Category Check)
+            $sku = strtoupper($cart->product->sku ?? '');
+            $isEGB = str_starts_with($sku, 'EGB');
 
+            // Cek keabsahan Bundle
             $isBundleActiveFlag = filter_var($cart->product->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
 
             $dateStr = $cart->product->bundle_end_date;
             $isValidDate = true;
-            if (! empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
+            if (!empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
                 try {
                     $isValidDate = Carbon::parse($dateStr)->isFuture();
                 } catch (\Exception $e) {
@@ -198,59 +203,59 @@ class CartController extends Controller
                 }
             }
 
-            // Pastikan bundle_price ada nilainya
-            $isBundleValid = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
+            // Driver HANYA JIKA dia Bundle Aktif, Tgl Valid, Ada Harga, DAN dia adalah EGB
+            $isDriver = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
 
-            $dateStr = $cart->product->bundle_end_date;
-            $isValidDate = true;
-            if (! empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
-                try {
-                    $isValidDate = Carbon::parse($dateStr)->isFuture();
-                } catch (\Exception $e) {
-                    $isValidDate = false;
+            // Pecah qty menjadi unit (1 barang = 1 baris di kolam)
+            for ($i = 0; $i < $cart->quantity; $i++) {
+                $itemData = [
+                    'cart_id'      => $cart->id,
+                    'normal_price' => $priceToUse,
+                    'bundle_price' => $cart->product->bundle_price
+                ];
+
+                if ($isDriver) {
+                    $drivers[] = $itemData;
+                } elseif (!$isEGB) {
+                    // Barang Non-EGB (Eco Serenity, dll) masuk ke kolam pasrah (Partners)
+                    $partners[] = $itemData;
                 }
             }
 
-            $isBundleValid = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
-
-            if ($isBundleValid) {
-                for ($i = 0; $i < $cart->quantity; $i++) {
-                    $bundlePool[] = [
-                        'cart_id' => $cart->id,
-                        'normal_price' => $priceToUse,
-                        'bundle_price' => $cart->product->bundle_price,
-                    ];
-                }
-            } else {
-                $cartUpdates[$cart->id] += $priceToUse * $cart->quantity;
-            }
+            // Semua cart awalnya diset ke harga normal/diskon per item
+            $cartUpdates[$cart->id] += $priceToUse * $cart->quantity;
         }
 
-        if (! empty($bundlePool)) {
-            usort($bundlePool, function ($a, $b) {
+        // TAHAP PENJODOHAN (PAIRING)
+        if (count($drivers) > 0 && count($partners) > 0) {
+
+            // Urutkan driver dari harga bundle yang paling tinggi untuk memprioritaskan diskon maksimal ke user
+            usort($drivers, function($a, $b) {
                 return $b['bundle_price'] <=> $a['bundle_price'];
             });
 
-            $totalItems = count($bundlePool);
-            $pairs = floor($totalItems / 2);
+            foreach ($drivers as $driver) {
+                if (count($partners) > 0) {
+                    // Tarik 1 partner keluar dari kolam
+                    $partner = array_shift($partners);
 
-            for ($i = 0; $i < $pairs; $i++) {
-                $item1 = $bundlePool[$i * 2];
-                $item2 = $bundlePool[$i * 2 + 1];
+                    // Hitung total normal mereka jika tidak dibundle
+                    $pairNormalPrice = $driver['normal_price'] + $partner['normal_price'];
+                    $pairBundlePrice = $driver['bundle_price'];
 
-                $pairPrice = max($item1['bundle_price'], $item2['bundle_price']);
-                $halfPrice = $pairPrice / 2;
+                    // Hitung Diskon yang Dihasilkan
+                    $discountForPair = $pairNormalPrice - $pairBundlePrice;
 
-                $cartUpdates[$item1['cart_id']] += $halfPrice;
-                $cartUpdates[$item2['cart_id']] += $halfPrice;
-            }
-
-            for ($i = $pairs * 2; $i < $totalItems; $i++) {
-                $unpairedItem = $bundlePool[$i];
-                $cartUpdates[$unpairedItem['cart_id']] += $unpairedItem['normal_price'];
+                    // Terapkan diskon hanya jika menguntungkan
+                    if ($discountForPair > 0) {
+                        // Potong langsung diskon tersebut dari total yang sudah diset di cartUpdates milik Driver
+                        $cartUpdates[$driver['cart_id']] -= $discountForPair;
+                    }
+                }
             }
         }
 
+        // Eksekusi Simpan Database
         foreach ($cartUpdates as $cartId => $grossAmount) {
             Cart::where('id', $cartId)->update(['gross_amount' => $grossAmount]);
         }
@@ -270,8 +275,8 @@ class CartController extends Controller
     {
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
-            'quantity' => 'required|integer|min:1',
-            'color' => 'nullable|string|max:50',
+            'quantity'   => 'required|integer|min:1',
+            'color'      => 'nullable|string|max:50',
         ]);
 
         $user = $request->user();
@@ -294,14 +299,14 @@ class CartController extends Controller
         DB::transaction(function () use ($existingCart, $user, $product, $newQuantity, $request) {
             if ($existingCart) {
                 $existingCart->update([
-                    'quantity' => $newQuantity,
+                    'quantity'     => $newQuantity,
                     'gross_amount' => 0,
                 ]);
             } else {
                 $user->carts()->create([
-                    'product_id' => $product->id,
-                    'color' => $request->color,
-                    'quantity' => $newQuantity,
+                    'product_id'   => $product->id,
+                    'color'        => $request->color,
+                    'quantity'     => $newQuantity,
                     'gross_amount' => 0,
                 ]);
             }
@@ -326,27 +331,34 @@ class CartController extends Controller
         $product = $cart->product;
 
         if ($validated['quantity'] > $product->stock) {
-            return response()->json(['message' => 'Stock limited!'], 422);
+            return response()->json([
+                'message' => 'Stock limited!'
+            ], 422);
         }
 
         $cart->update([
-            'quantity' => $validated['quantity'],
+            'quantity'     => $validated['quantity'],
             'gross_amount' => 0,
         ]);
 
         $this->syncCartPrices($user);
 
-        return response()->json(['message' => 'Cart updated successfully']);
+        return response()->json([
+            'message' => 'Cart updated successfully'
+        ]);
     }
 
     public function destroy(Request $request, $id)
     {
         $user = $request->user();
         $cart = $user->carts()->findOrFail($id);
+
         $cart->delete();
 
         $this->syncCartPrices($user);
 
-        return response()->json(['message' => 'Item removed']);
+        return response()->json([
+            'message' => 'Item removed'
+        ]);
     }
 }
