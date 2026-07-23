@@ -8,7 +8,6 @@
 // use Illuminate\Http\Request;
 // use Illuminate\Support\Facades\DB;
 
-
 // class CartController extends Controller
 // {
 //     // =========================================================================
@@ -146,12 +145,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Product;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class CartController extends Controller
 {
@@ -168,7 +166,7 @@ class CartController extends Controller
         $cartUpdates = [];
 
         foreach ($carts as $cart) {
-            if (!isset($cartUpdates[$cart->id])) {
+            if (! isset($cartUpdates[$cart->id])) {
                 $cartUpdates[$cart->id] = 0;
             }
 
@@ -180,16 +178,32 @@ class CartController extends Controller
 
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
                 $cartUpdates[$cart->id] += $cart->product->wholesale_price * $cart->quantity;
+
                 continue;
             }
 
             // PERBAIKAN: Cast string secara eksplisit agar kebal terhadap strict typing error
-            $isActiveStr = (string)$cart->product->is_bundle_active;
-            $isBundleActiveFlag = in_array($isActiveStr, ['1', 'true'], true);
-            
+            // $isActiveStr = (string)$cart->product->is_bundle_active;
+            // $isBundleActiveFlag = in_array($isActiveStr, ['1', 'true'], true);
+
+            $isBundleActiveFlag = filter_var($cart->product->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
+
             $dateStr = $cart->product->bundle_end_date;
             $isValidDate = true;
-            if (!empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
+            if (! empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
+                try {
+                    $isValidDate = Carbon::parse($dateStr)->isFuture();
+                } catch (\Exception $e) {
+                    $isValidDate = false;
+                }
+            }
+
+            // Pastikan bundle_price ada nilainya
+            $isBundleValid = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
+
+            $dateStr = $cart->product->bundle_end_date;
+            $isValidDate = true;
+            if (! empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
                 try {
                     $isValidDate = Carbon::parse($dateStr)->isFuture();
                 } catch (\Exception $e) {
@@ -202,9 +216,9 @@ class CartController extends Controller
             if ($isBundleValid) {
                 for ($i = 0; $i < $cart->quantity; $i++) {
                     $bundlePool[] = [
-                        'cart_id'      => $cart->id,
+                        'cart_id' => $cart->id,
                         'normal_price' => $priceToUse,
-                        'bundle_price' => $cart->product->bundle_price
+                        'bundle_price' => $cart->product->bundle_price,
                     ];
                 }
             } else {
@@ -212,8 +226,8 @@ class CartController extends Controller
             }
         }
 
-        if (!empty($bundlePool)) {
-            usort($bundlePool, function($a, $b) {
+        if (! empty($bundlePool)) {
+            usort($bundlePool, function ($a, $b) {
                 return $b['bundle_price'] <=> $a['bundle_price'];
             });
 
@@ -256,8 +270,8 @@ class CartController extends Controller
     {
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
-            'quantity'   => 'required|integer|min:1',
-            'color'      => 'nullable|string|max:50',
+            'quantity' => 'required|integer|min:1',
+            'color' => 'nullable|string|max:50',
         ]);
 
         $user = $request->user();
@@ -280,15 +294,15 @@ class CartController extends Controller
         DB::transaction(function () use ($existingCart, $user, $product, $newQuantity, $request) {
             if ($existingCart) {
                 $existingCart->update([
-                    'quantity'     => $newQuantity,
-                    'gross_amount' => 0, 
+                    'quantity' => $newQuantity,
+                    'gross_amount' => 0,
                 ]);
             } else {
                 $user->carts()->create([
-                    'product_id'   => $product->id,
-                    'color'        => $request->color,
-                    'quantity'     => $newQuantity,
-                    'gross_amount' => 0, 
+                    'product_id' => $product->id,
+                    'color' => $request->color,
+                    'quantity' => $newQuantity,
+                    'gross_amount' => 0,
                 ]);
             }
         });
@@ -316,8 +330,8 @@ class CartController extends Controller
         }
 
         $cart->update([
-            'quantity'     => $validated['quantity'],
-            'gross_amount' => 0, 
+            'quantity' => $validated['quantity'],
+            'gross_amount' => 0,
         ]);
 
         $this->syncCartPrices($user);
