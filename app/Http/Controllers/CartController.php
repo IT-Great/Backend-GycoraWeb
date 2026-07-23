@@ -157,22 +157,125 @@ class CartController extends Controller
     // =========================================================================
     // HELPER: SINKRONISASI HARGA DINAMIS (CROSS-CATEGORY BUNDLE SYSTEM)
     // =========================================================================
+    // private function syncCartPrices($user)
+    // {
+    //     $carts = $user->carts()->with('product')->get();
+    //     $totalCartQty = $carts->sum('quantity');
+    //     $isReseller = $user->usertype === 'reseller';
+
+    //     $drivers = [];  // Kolam untuk Produk EGB yang Bundle Aktif
+    //     $partners = []; // Kolam untuk Semua Produk Non-EGB
+    //     $cartUpdates = [];
+
+    //     foreach ($carts as $cart) {
+    //         // Inisialisasi awal nilai array
+    //         if (!isset($cartUpdates[$cart->id])) {
+    //             $cartUpdates[$cart->id] = 0;
+    //         }
+
+    //         $priceToUse = $cart->product->price;
+
+    //         // Harga Diskon Reguler
+    //         if ($cart->product->discount_price > 0 && $cart->product->discount_price < $cart->product->price) {
+    //             $priceToUse = $cart->product->discount_price;
+    //         }
+
+    //         // Jika Reseller valid, bypass semua urusan promo bundle
+    //         if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
+    //             $cartUpdates[$cart->id] += $cart->product->wholesale_price * $cart->quantity;
+    //             continue;
+    //         }
+
+    //         // Identifikasi apakah barang ini EGB (Cross Category Check)
+    //         $sku = strtoupper($cart->product->sku ?? '');
+    //         $isEGB = str_starts_with($sku, 'EGB');
+
+    //         // Cek keabsahan Bundle
+    //         $isBundleActiveFlag = filter_var($cart->product->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
+
+    //         $dateStr = $cart->product->bundle_end_date;
+    //         $isValidDate = true;
+    //         if (!empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
+    //             try {
+    //                 $isValidDate = Carbon::parse($dateStr)->isFuture();
+    //             } catch (\Exception $e) {
+    //                 $isValidDate = false;
+    //             }
+    //         }
+
+    //         // Driver HANYA JIKA dia Bundle Aktif, Tgl Valid, Ada Harga, DAN dia adalah EGB
+    //         $isDriver = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
+
+    //         // Pecah qty menjadi unit (1 barang = 1 baris di kolam)
+    //         for ($i = 0; $i < $cart->quantity; $i++) {
+    //             $itemData = [
+    //                 'cart_id'      => $cart->id,
+    //                 'normal_price' => $priceToUse,
+    //                 'bundle_price' => $cart->product->bundle_price
+    //             ];
+
+    //             if ($isDriver) {
+    //                 $drivers[] = $itemData;
+    //             } elseif (!$isEGB) {
+    //                 // Barang Non-EGB (Eco Serenity, dll) masuk ke kolam pasrah (Partners)
+    //                 $partners[] = $itemData;
+    //             }
+    //         }
+
+    //         // Semua cart awalnya diset ke harga normal/diskon per item
+    //         $cartUpdates[$cart->id] += $priceToUse * $cart->quantity;
+    //     }
+
+    //     // TAHAP PENJODOHAN (PAIRING)
+    //     if (count($drivers) > 0 && count($partners) > 0) {
+
+    //         // Urutkan driver dari harga bundle yang paling tinggi untuk memprioritaskan diskon maksimal ke user
+    //         usort($drivers, function($a, $b) {
+    //             return $b['bundle_price'] <=> $a['bundle_price'];
+    //         });
+
+    //         foreach ($drivers as $driver) {
+    //             if (count($partners) > 0) {
+    //                 // Tarik 1 partner keluar dari kolam
+    //                 $partner = array_shift($partners);
+
+    //                 // Hitung total normal mereka jika tidak dibundle
+    //                 $pairNormalPrice = $driver['normal_price'] + $partner['normal_price'];
+    //                 $pairBundlePrice = $driver['bundle_price'];
+
+    //                 // Hitung Diskon yang Dihasilkan
+    //                 $discountForPair = $pairNormalPrice - $pairBundlePrice;
+
+    //                 // Terapkan diskon hanya jika menguntungkan
+    //                 if ($discountForPair > 0) {
+    //                     // Potong langsung diskon tersebut dari total yang sudah diset di cartUpdates milik Driver
+    //                     $cartUpdates[$driver['cart_id']] -= $discountForPair;
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     // Eksekusi Simpan Database
+    //     foreach ($cartUpdates as $cartId => $grossAmount) {
+    //         Cart::where('id', $cartId)->update(['gross_amount' => $grossAmount]);
+    //     }
+    // }
+
+    // =========================================================================
+    // HELPER: SINKRONISASI HARGA DINAMIS (DRIVER - PARTNER BUNDLE SYSTEM)
+    // =========================================================================
     private function syncCartPrices($user)
     {
         $carts = $user->carts()->with('product')->get();
         $totalCartQty = $carts->sum('quantity');
         $isReseller = $user->usertype === 'reseller';
 
-        $drivers = [];  // Kolam untuk Produk EGB yang Bundle Aktif
-        $partners = []; // Kolam untuk Semua Produk Non-EGB
+        $driversPool = [];  // Kolam untuk Produk EGB (Penentu Harga Bundle)
+        $partnersPool = []; // Kolam untuk Semua Produk Non-EGB (Pasif)
         $cartUpdates = [];
 
         foreach ($carts as $cart) {
-            // Inisialisasi awal nilai array
-            if (!isset($cartUpdates[$cart->id])) {
-                $cartUpdates[$cart->id] = 0;
-            }
-
+            $cartUpdates[$cart->id] = 0; // Reset nilai awal
             $priceToUse = $cart->product->price;
 
             // Harga Diskon Reguler
@@ -180,21 +283,21 @@ class CartController extends Controller
                 $priceToUse = $cart->product->discount_price;
             }
 
-            // Jika Reseller valid, bypass semua urusan promo bundle
+            // Jika Reseller valid (Bypass urusan bundle)
             if ($isReseller && $cart->product->wholesale_price > 0 && $totalCartQty >= 24) {
-                $cartUpdates[$cart->id] += $cart->product->wholesale_price * $cart->quantity;
+                $cartUpdates[$cart->id] = $cart->product->wholesale_price * $cart->quantity;
                 continue;
             }
 
-            // Identifikasi apakah barang ini EGB (Cross Category Check)
+            // Identifikasi Kategori via SKU
             $sku = strtoupper($cart->product->sku ?? '');
             $isEGB = str_starts_with($sku, 'EGB');
 
-            // Cek keabsahan Bundle
+            // Cek keabsahan Bundle HANYA untuk Driver
             $isBundleActiveFlag = filter_var($cart->product->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
-
             $dateStr = $cart->product->bundle_end_date;
             $isValidDate = true;
+
             if (!empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
                 try {
                     $isValidDate = Carbon::parse($dateStr)->isFuture();
@@ -203,61 +306,69 @@ class CartController extends Controller
                 }
             }
 
-            // Driver HANYA JIKA dia Bundle Aktif, Tgl Valid, Ada Harga, DAN dia adalah EGB
-            $isDriver = $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
+            // Syarat mutlak menjadi Driver: Harus EGB, Bundle Aktif, Tanggal Valid, Punya Harga Bundle
+            $isDriver = $isEGB && $isBundleActiveFlag && $isValidDate && $cart->product->bundle_price > 0;
 
-            // Pecah qty menjadi unit (1 barang = 1 baris di kolam)
+            // Pecah qty menjadi unit tunggal ke dalam kolam masing-masing
             for ($i = 0; $i < $cart->quantity; $i++) {
                 $itemData = [
                     'cart_id'      => $cart->id,
                     'normal_price' => $priceToUse,
-                    'bundle_price' => $cart->product->bundle_price
+                    'bundle_price' => $cart->product->bundle_price // Hanya berguna bagi Driver
                 ];
 
                 if ($isDriver) {
-                    $drivers[] = $itemData;
+                    $driversPool[] = $itemData;
                 } elseif (!$isEGB) {
-                    // Barang Non-EGB (Eco Serenity, dll) masuk ke kolam pasrah (Partners)
-                    $partners[] = $itemData;
+                    // Barang Non-EGB mutlak menjadi Partner pasif
+                    $partnersPool[] = $itemData;
+                } else {
+                    // Jika dia EGB tapi bundle mati/expired, langsung masuk tagihan normal
+                    $cartUpdates[$cart->id] += $priceToUse;
                 }
             }
-
-            // Semua cart awalnya diset ke harga normal/diskon per item
-            $cartUpdates[$cart->id] += $priceToUse * $cart->quantity;
         }
 
-        // TAHAP PENJODOHAN (PAIRING)
-        if (count($drivers) > 0 && count($partners) > 0) {
-
-            // Urutkan driver dari harga bundle yang paling tinggi untuk memprioritaskan diskon maksimal ke user
-            usort($drivers, function($a, $b) {
+        // TAHAP PENJODOHAN (CROSS-CATEGORY PAIRING)
+        if (count($driversPool) > 0 && count($partnersPool) > 0) {
+            // Prioritaskan Driver dengan diskon/harga bundle tertinggi
+            usort($driversPool, function($a, $b) {
                 return $b['bundle_price'] <=> $a['bundle_price'];
             });
 
-            foreach ($drivers as $driver) {
-                if (count($partners) > 0) {
-                    // Tarik 1 partner keluar dari kolam
-                    $partner = array_shift($partners);
+            while (count($driversPool) > 0 && count($partnersPool) > 0) {
+                $driver = array_shift($driversPool);
+                $partner = array_shift($partnersPool);
 
-                    // Hitung total normal mereka jika tidak dibundle
-                    $pairNormalPrice = $driver['normal_price'] + $partner['normal_price'];
-                    $pairBundlePrice = $driver['bundle_price'];
+                $pairNormalPrice = $driver['normal_price'] + $partner['normal_price'];
+                $pairBundlePrice = $driver['bundle_price'];
 
-                    // Hitung Diskon yang Dihasilkan
-                    $discountForPair = $pairNormalPrice - $pairBundlePrice;
+                $discountForPair = $pairNormalPrice - $pairBundlePrice;
 
-                    // Terapkan diskon hanya jika menguntungkan
-                    if ($discountForPair > 0) {
-                        // Potong langsung diskon tersebut dari total yang sudah diset di cartUpdates milik Driver
-                        $cartUpdates[$driver['cart_id']] -= $discountForPair;
-                    }
+                // Terapkan diskon ke keranjang milik Driver (atau dibagi rata juga boleh, di DB totalnya sama saja)
+                if ($discountForPair > 0) {
+                    $cartUpdates[$driver['cart_id']] += ($driver['normal_price'] - $discountForPair);
+                    $cartUpdates[$partner['cart_id']] += $partner['normal_price'];
+                } else {
+                    $cartUpdates[$driver['cart_id']] += $driver['normal_price'];
+                    $cartUpdates[$partner['cart_id']] += $partner['normal_price'];
                 }
             }
         }
 
-        // Eksekusi Simpan Database
+        // Sisa Jomblo (Driver/Partner yang tidak kebagian pasangan) bayar normal
+        foreach ($driversPool as $driver) {
+            $cartUpdates[$driver['cart_id']] += $driver['normal_price'];
+        }
+        foreach ($partnersPool as $partner) {
+            $cartUpdates[$partner['cart_id']] += $partner['normal_price'];
+        }
+
+        // Eksekusi Update ke Database
         foreach ($cartUpdates as $cartId => $grossAmount) {
-            Cart::where('id', $cartId)->update(['gross_amount' => $grossAmount]);
+            if ($grossAmount > 0) { // Menghindari query kosong/nol jika grosir aktif
+                Cart::where('id', $cartId)->update(['gross_amount' => $grossAmount]);
+            }
         }
     }
 
