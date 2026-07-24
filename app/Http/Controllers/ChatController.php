@@ -444,7 +444,7 @@ class ChatController extends Controller
         try {
             // Ambil data produk sebagai bahan konteks AI
             $products = Product::where('status', 'active')
-                ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description')
+                ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', 'is_bundle_active')
                 ->take(15) 
                 ->get();
             
