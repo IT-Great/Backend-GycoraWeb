@@ -944,7 +944,7 @@ class ChatController extends Controller
             }
 
             // [PERBAIKAN MODEL]: Pastikan menggunakan 1.5-flash (tidak ada versi 3.5)
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
 
             $payload = [
                 'system_instruction' => [
