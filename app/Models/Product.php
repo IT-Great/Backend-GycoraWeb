@@ -98,6 +98,7 @@ class Product extends Model
         'is_bundle_active', // <-- BARU
         'bundle_price',     // <-- BARU
         'bundle_prices',    // <-- BARU
+        'bundle_start_date', // <-- BARU
         'bundle_end_date',  // <-- BARU
         'stock',
         'image_url',
@@ -118,6 +119,7 @@ class Product extends Model
         'voucher_discount_prices' => 'array',
         'bundle_prices' => 'array', // <-- BARU
         'is_bundle_active' => 'boolean', // <-- BARU
+        'bundle_start_date' => 'datetime', // <-- BARU
         'bundle_end_date' => 'datetime', // <-- BARU
         'stock' => 'integer',
         'variant_images' => 'array',

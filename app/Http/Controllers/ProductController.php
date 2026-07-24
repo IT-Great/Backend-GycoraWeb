@@ -1064,6 +1064,7 @@ class ProductController extends Controller
             // 👇 Validasi Bundle 👇
             'is_bundle_active' => 'boolean',
             'bundle_price' => 'nullable|numeric|min:0',
+            'bundle_start_date' => 'nullable|date',
             'bundle_end_date' => 'nullable|date',
 
             // 👇 Validasi Multi Currency 👇
@@ -1107,6 +1108,8 @@ class ProductController extends Controller
             $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null); // 👇 Tambahkan ini
 
             $data['bundle_prices'] = $request->input('bundle_prices', null); // <-- BARU
+            $data['bundle_start_date'] = $request->input('bundle_start_date', null); // <-- BARU
+            $data['bundle_end_date'] = $request->input('bundle_end_date', null); // <-- BARU
 
             $product = Product::create($data);
 
@@ -1245,6 +1248,7 @@ class ProductController extends Controller
             // 👇 Validasi Bundle 👇
             'is_bundle_active' => 'boolean',
             'bundle_price' => 'nullable|numeric|min:0',
+            'bundle_start_date' => 'nullable|date', 
             'bundle_end_date' => 'nullable|date',
 
             // Validasi Multi Currency
@@ -1283,6 +1287,8 @@ class ProductController extends Controller
         $data['wholesale_prices'] = $request->input('wholesale_prices', null);
         $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null);
         $data['bundle_prices'] = $request->input('bundle_prices', null); // <-- BARU
+        $data['bundle_start_date'] = $request->input('bundle_start_date', null); // <-- BARU
+        $data['bundle_end_date'] = $request->input('bundle_end_date', null); // <-- BARU
 
         if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
             $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
