@@ -461,7 +461,7 @@ class ChatController extends Controller
                 return "Mohon maaf kak, kunci API AI belum dikonfigurasi di server kami (.env).";
             }
 
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
 
             $payload = [
                 'system_instruction' => [
