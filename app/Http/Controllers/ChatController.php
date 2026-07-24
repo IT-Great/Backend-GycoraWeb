@@ -490,6 +490,149 @@
 //     }
 // }
 
+// namespace App\Http\Controllers;
+
+// use App\Models\User;
+// use App\Models\Message;
+// use App\Models\Product; 
+// use App\Events\MessageSent;
+// use Illuminate\Http\Request;
+// use Illuminate\Support\Facades\Log;
+// use Illuminate\Support\Facades\Http;
+
+// class ChatController extends Controller
+// {
+//     // Mengambil daftar staf dan AI
+//     public function getStaffList() {
+//         // Ambil user dengan tipe 'admin' dan 'ai'
+//         // orderByRaw membuat AI tampil paling atas di daftar kontak
+//         $staff = User::whereIn('usertype', ['admin', 'ai'])
+//             ->orderByRaw("FIELD(usertype, 'ai', 'admin')")
+//             ->get();
+
+//         return response()->json($staff);
+//     }
+
+//     // Mengambil histori pesan (Sekarang berlaku sama untuk Admin maupun AI)
+//     public function getMessages($userId) {
+//         $myId = auth()->id();
+//         $messages = Message::where(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $myId)->where('receiver_id', $userId);
+//         })->orWhere(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $userId)->where('receiver_id', $myId);
+//         })->orderBy('created_at', 'asc')->get();
+
+//         return response()->json($messages);
+//     }
+
+//     // Menyimpan pesan
+//     public function sendMessage(Request $request) {
+//         $request->validate([
+//             'receiver_id' => 'required|exists:users,id', 
+//             'message' => 'required|string'
+//         ]);
+
+//         $myId = auth()->id();
+//         $receiver = User::findOrFail($request->receiver_id);
+
+//         // 1. Simpan pesan pengguna ke database SECARA PERMANEN
+//         $userMessage = Message::create([
+//             'sender_id' => $myId,
+//             'receiver_id' => $receiver->id,
+//             'message' => $request->message
+//         ]);
+
+//         // ==========================================================
+//         // JIKA PENERIMA ADALAH AI
+//         // ==========================================================
+//         if ($receiver->usertype === 'ai') {
+            
+//             // Panggil Gemini (Membaca pesan user)
+//             $aiResponseText = $this->generateGeminiResponse($request->message);
+
+//             // 2. Simpan balasan AI ke database SECARA PERMANEN
+//             $aiMessage = Message::create([
+//                 'sender_id' => $receiver->id, // Pengirimnya adalah entitas AI
+//                 'receiver_id' => $myId,
+//                 'message' => $aiResponseText
+//             ]);
+
+//             // Broadcast pesan AI via Pusher
+//             broadcast(new MessageSent($aiMessage));
+
+//             // Kembalikan balasan langsung agar UI merender dengan cepat
+//             return response()->json([
+//                 'status' => 'success',
+//                 'user_message' => $userMessage,
+//                 'ai_message' => $aiMessage 
+//             ]);
+//         } 
+        
+//         // ==========================================================
+//         // JIKA PENERIMA ADALAH MANUSIA (Admin)
+//         // ==========================================================
+//         else {
+//             broadcast(new MessageSent($userMessage))->toOthers();
+            
+//             return response()->json([
+//                 'status' => 'success',
+//                 'user_message' => $userMessage
+//             ]);
+//         }
+//     }
+
+//     /**
+//      * Helper Function: Generate Balasan Gemini
+//      */
+//     private function generateGeminiResponse($userText)
+//     {
+//         try {
+//             $products = Product::where('status', 'active')
+//                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', "is_bundle_active")
+//                 ->take(15) 
+//                 ->get();
+            
+//             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
+//             foreach ($products as $p) {
+//                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
+//             }
+
+//             $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (gunakan gaya bahasa 'halo', 'kak', dll). Jawablah pertanyaan pengguna berdasarkan data produk berikut ini. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora atau pertanyaan tidak jelas, tolak dengan sangat halus atau tawarkan untuk dihubungkan ke admin manusia.\n\n" . $dbContext;
+
+//             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
+            
+//             if (empty($apiKey)) {
+//                 return "Maaf kak, kunci API AI belum dikonfigurasi oleh administrator di server.";
+//             }
+
+//             $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+
+//             $payload = [
+//                 'system_instruction' => [
+//                     'parts' => [['text' => $systemInstruction]]
+//                 ],
+//                 'contents' => [
+//                     ['role' => 'user', 'parts' => [['text' => $userText]]]
+//                 ]
+//             ];
+
+//             $response = Http::timeout(15)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+
+//             if ($response->successful()) {
+//                 $data = $response->json();
+//                 return $data['candidates'][0]['content']['parts'][0]['text'] ?? "Maaf kak, saya sedang gagal memproses jawaban Anda. Bisa ulangi pertanyaannya?";
+//             }
+
+//             Log::error('Gemini API Error: ' . $response->body());
+//             return "Maaf kak, koneksi otak AI saya sedang bermasalah. Mohon hubungi admin manusia kami ya.";
+
+//         } catch (\Exception $e) {
+//             Log::error('Gemini Exception: ' . $e->getMessage());
+//             return "Maaf kak, sistem AI sedang offline saat ini.";
+//         }
+//     }
+// }
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
@@ -502,18 +645,44 @@ use Illuminate\Support\Facades\Http;
 
 class ChatController extends Controller
 {
-    // Mengambil daftar staf dan AI
+    // Mengambil daftar staf dan AI (Sistem Auto-Healing)
     public function getStaffList() {
-        // Ambil user dengan tipe 'admin' dan 'ai'
-        // orderByRaw membuat AI tampil paling atas di daftar kontak
-        $staff = User::whereIn('usertype', ['admin', 'ai'])
-            ->orderByRaw("FIELD(usertype, 'ai', 'admin')")
+        
+        // 1. AUTO-CREATE AI JIKA BELUM ADA (Menghindari error Tinker/Database)
+        // Kita set usertype sebagai 'admin' agar lolos validasi ENUM database Anda
+        $aiUser = User::firstOrCreate(
+            ['email' => 'ai@gycora.com'],
+            [
+                'first_name' => 'Gycora',
+                'last_name' => 'AI Assistant',
+                'password' => bcrypt('password_rahasia_ai_123'),
+                'usertype' => 'admin', // Diterima database
+                'phone' => '00000000000'
+            ]
+        );
+
+        // 2. Tarik Admin Manusia dan AI dari database
+        $staff = User::where('usertype', 'admin')
+            ->orWhere('email', 'ai@gycora.com')
             ->get();
+
+        // 3. "Sulap" data AI agar Frontend (React) mengenalinya sebagai Bot
+        $staff->transform(function ($user) {
+            if ($user->email === 'ai@gycora.com') {
+                $user->usertype = 'ai'; // Trigger warna ungu & logika di frontend
+            }
+            return $user;
+        });
+
+        // 4. Urutkan agar Gycora AI selalu tampil paling atas di daftar Chat
+        $staff = $staff->sortByDesc(function ($user) {
+            return $user->usertype === 'ai' ? 1 : 0;
+        })->values();
 
         return response()->json($staff);
     }
 
-    // Mengambil histori pesan (Sekarang berlaku sama untuk Admin maupun AI)
+    // Mengambil histori pesan
     public function getMessages($userId) {
         $myId = auth()->id();
         $messages = Message::where(function($q) use ($myId, $userId) {
@@ -543,24 +712,24 @@ class ChatController extends Controller
         ]);
 
         // ==========================================================
-        // JIKA PENERIMA ADALAH AI
+        // JIKA PENERIMA ADALAH AI (Dideteksi dari email)
         // ==========================================================
-        if ($receiver->usertype === 'ai') {
+        if ($receiver->email === 'ai@gycora.com') {
             
             // Panggil Gemini (Membaca pesan user)
             $aiResponseText = $this->generateGeminiResponse($request->message);
 
             // 2. Simpan balasan AI ke database SECARA PERMANEN
             $aiMessage = Message::create([
-                'sender_id' => $receiver->id, // Pengirimnya adalah entitas AI
+                'sender_id' => $receiver->id, // Pengirimnya adalah entitas nyata AI di DB
                 'receiver_id' => $myId,
                 'message' => $aiResponseText
             ]);
 
-            // Broadcast pesan AI via Pusher
+            // Broadcast pesan AI via Websocket (Pusher/Echo)
             broadcast(new MessageSent($aiMessage));
 
-            // Kembalikan balasan langsung agar UI merender dengan cepat
+            // Kembalikan balasan langsung agar UI merender dengan cepat tanpa nunggu websocket
             return response()->json([
                 'status' => 'success',
                 'user_message' => $userMessage,
@@ -569,7 +738,7 @@ class ChatController extends Controller
         } 
         
         // ==========================================================
-        // JIKA PENERIMA ADALAH MANUSIA (Admin)
+        // JIKA PENERIMA ADALAH MANUSIA (Admin Manusia)
         // ==========================================================
         else {
             broadcast(new MessageSent($userMessage))->toOthers();
@@ -587,8 +756,9 @@ class ChatController extends Controller
     private function generateGeminiResponse($userText)
     {
         try {
+            // Suplai data agar AI pintar menjawab pertanyaan produk
             $products = Product::where('status', 'active')
-                ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', "is_bundle_active")
+                ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description')
                 ->take(15) 
                 ->get();
             
