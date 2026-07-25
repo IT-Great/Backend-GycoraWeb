@@ -157,7 +157,7 @@ class AuthController extends Controller
     public function getAllUsers()
     {
         // Mengambil user yang bukan admin/staf
-        $users = User::where('usertype', ['user', 'reseller'])
+        $users = User::whereIn('usertype', ['user', 'reseller'])
             ->orderBy('id', 'desc')
             ->get(['id', 'first_name', 'last_name', 'email', 'usertype', 'is_subscribed', 'created_at']);
 
