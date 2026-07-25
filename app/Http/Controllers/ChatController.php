@@ -866,6 +866,8 @@ class ChatController extends Controller
 
     // Menyimpan pesan
     public function sendMessage(Request $request) {
+        throw new \Exception("Testing Sentry User Context Gycora!");
+        
         $request->validate([
             'receiver_id' => 'required|exists:users,id', 
             'message' => 'required|string'
