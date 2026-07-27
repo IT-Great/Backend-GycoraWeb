@@ -1788,7 +1788,7 @@ class TransactionController extends Controller
                 // LOW STOCK ALERT
                 if ($product->stock <= 5) {
                     try {
-                        Mail::to('gycora.essence@gmail.com')->send(new LowStockAlertMail($product));
+                        Mail::to('gycora.essence@gmail.com')->queue(new LowStockAlertMail($product));
                     } catch (\Exception $e) {}
                 }
             }
@@ -2120,7 +2120,7 @@ class TransactionController extends Controller
 
         // [BARU] Kirim notifikasi email ke user
         try {
-            Mail::to($transaction->user->email)->send(new RefundResultMail($transaction, 'approve'));
+            Mail::to($transaction->user->email)->queue(new RefundResultMail($transaction, 'approve'));
         } catch (\Exception $e) {
             // Jika gagal kirim email, jangan hentikan proses approve
             Log::error("Gagal kirim email Approve Refund ke {$transaction->user->email}: ".$e->getMessage());
@@ -2153,7 +2153,7 @@ class TransactionController extends Controller
 
         // [BARU] Kirim notifikasi email ke user
         try {
-            Mail::to($transaction->user->email)->send(new RefundResultMail($transaction, 'reject'));
+            Mail::to($transaction->user->email)->queue(new RefundResultMail($transaction, 'reject'));
         } catch (\Exception $e) {
             // Jika gagal kirim email, jangan hentikan proses reject
             Log::error("Gagal kirim email Reject Refund ke {$transaction->user->email}: ".$e->getMessage());
