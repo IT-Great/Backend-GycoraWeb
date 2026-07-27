@@ -31,7 +31,7 @@ class AppServiceProvider extends ServiceProvider
         // Panggil fungsi arsitektur pembatasan API di sini
         $this->configureRateLimiting();
 
-        Model::preventLazyLoading(app()->isProduction());
+        Model::preventLazyLoading(!app()->isProduction());
     }
 
        /**
