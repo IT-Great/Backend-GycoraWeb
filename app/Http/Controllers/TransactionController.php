@@ -1793,6 +1793,12 @@ class TransactionController extends Controller
                 }
             }
 
+            // 👇 TAMBAHKAN KODE INI UNTUK MENGHAPUS KERANJANG 👇
+            Cart::where('user_id', $lockedUser->id)
+                ->whereIn('id', $request->cart_ids)
+                ->delete();
+            // 👆 ============================================== 👆
+
             return [
                 'transaction' => $transaction,
                 'totalAmount' => $totalAmount,
