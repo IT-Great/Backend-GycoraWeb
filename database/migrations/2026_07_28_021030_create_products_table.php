@@ -30,6 +30,11 @@ return new class extends Migration
             $table->integer('stock')->default(0);
             $table->string('image_url')->nullable();
             $table->enum('status', ['active', 'inactive'])->default('active');
+            $table->boolean('is_bundle_active')->default(false);
+            $table->decimal('bundle_price', 15)->nullable();
+            $table->json('bundle_prices')->nullable();
+            $table->timestamp('bundle_start_date')->nullable();
+            $table->timestamp('bundle_end_date')->nullable();
             $table->timestamp('created_at')->nullable()->useCurrent();
             $table->timestamp('updated_at')->useCurrentOnUpdate()->nullable()->useCurrent();
             $table->longText('variant_images')->nullable();
