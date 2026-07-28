@@ -66,7 +66,7 @@
 //     // Mengambil daftar staf (ditambah AI Assistant)
 //     public function getStaffList() {
 //         $staff = User::where('usertype', 'admin')->get()->toArray();
-        
+
 //         // Inject Gycora AI Assistant di urutan paling atas
 //         $aiAssistant = [
 //             'id' => 0, // ID khusus untuk AI
@@ -75,7 +75,7 @@
 //             'usertype' => 'Bot 24/7',
 //             'profile_image' => null,
 //         ];
-        
+
 //         array_unshift($staff, $aiAssistant);
 
 //         return response()->json($staff);
@@ -119,7 +119,7 @@
 //         // ==========================================================
 //         // JIKA PESAN DIKIRIM KE AI (receiver_id == 0)
 //         // ==========================================================
-        
+
 //         // Panggil Gemini secara asinkronus (atau synchronous tapi cepat)
 //         $aiResponseText = $this->generateGeminiResponse($request->message);
 
@@ -149,7 +149,7 @@
 //                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description')
 //                 ->take(10) // Batasi agar token tidak kepenuhan
 //                 ->get();
-            
+
 //             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
 //             foreach ($products as $p) {
 //                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
@@ -193,7 +193,7 @@
 
 // use App\Models\User;
 // use App\Models\Message;
-// use App\Models\Product; 
+// use App\Models\Product;
 // use App\Events\MessageSent;
 // use Illuminate\Http\Request;
 // use Illuminate\Support\Facades\Log;
@@ -204,7 +204,7 @@
 //     // Mengambil daftar staf (ditambah AI Assistant)
 //     public function getStaffList() {
 //         $staff = User::where('usertype', 'admin')->get()->toArray();
-        
+
 //         // Inject Gycora AI Assistant di urutan paling atas
 //         $aiAssistant = [
 //             'id' => 0, // ID khusus untuk AI
@@ -213,7 +213,7 @@
 //             'usertype' => 'Bot 24/7',
 //             'profile_image' => null,
 //         ];
-        
+
 //         array_unshift($staff, $aiAssistant);
 
 //         return response()->json($staff);
@@ -234,7 +234,7 @@
 //     // Menyimpan pesan
 //     public function sendMessage(Request $request) {
 //         $request->validate([
-//             'receiver_id' => 'required|numeric', 
+//             'receiver_id' => 'required|numeric',
 //             'message' => 'required|string'
 //         ]);
 
@@ -260,18 +260,18 @@
 //         // ==========================================================
 //         // JIKA KE AI (receiver_id == 0)
 //         // ==========================================================
-        
+
 //         // Panggil Gemini (Synchronous)
 //         $aiResponseText = $this->generateGeminiResponse($request->message);
 
 //         // 2. Simpan balasan AI ke database
 //         $aiMessage = Message::create([
-//             'sender_id' => 0, 
+//             'sender_id' => 0,
 //             'receiver_id' => $myId,
 //             'message' => $aiResponseText
 //         ]);
 
-//         // 3. Broadcast pesan AI (TANPA toOthers() karena kita mau user saat ini juga menerima notifikasinya jika mereka buka 2 tab, 
+//         // 3. Broadcast pesan AI (TANPA toOthers() karena kita mau user saat ini juga menerima notifikasinya jika mereka buka 2 tab,
 //         // walau sebenarnya kita langsung mereturn ai_message di bawah)
 //         broadcast(new MessageSent($aiMessage));
 
@@ -291,9 +291,9 @@
 //         try {
 //             $products = Product::where('status', 'active')
 //                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description')
-//                 ->take(15) 
+//                 ->take(15)
 //                 ->get();
-            
+
 //             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
 //             foreach ($products as $p) {
 //                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
@@ -302,7 +302,7 @@
 //             $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (gunakan gaya bahasa 'halo', 'kak', dll). Jawablah pertanyaan pengguna berdasarkan data produk berikut ini. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora atau pertanyaan tidak jelas, tolak dengan sangat halus atau tawarkan untuk dihubungkan ke admin manusia.\n\n" . $dbContext;
 
 //             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            
+
 //             if (!$apiKey) {
 //                 return "Maaf, kunci API AI belum dikonfigurasi oleh administrator.";
 //             }
@@ -339,7 +339,7 @@
 
 // use App\Models\User;
 // use App\Models\Message;
-// use App\Models\Product; 
+// use App\Models\Product;
 // use App\Events\MessageSent;
 // use Illuminate\Http\Request;
 // use Illuminate\Support\Facades\Log;
@@ -350,7 +350,7 @@
 //     // Mengambil daftar staf (ditambah AI Assistant)
 //     public function getStaffList() {
 //         $staff = User::where('usertype', 'admin')->get()->toArray();
-        
+
 //         // Inject Gycora AI Assistant di urutan paling atas
 //         $aiAssistant = [
 //             'id' => 0, // ID khusus untuk AI
@@ -359,7 +359,7 @@
 //             'usertype' => 'Bot 24/7',
 //             'profile_image' => null,
 //         ];
-        
+
 //         array_unshift($staff, $aiAssistant);
 
 //         return response()->json($staff);
@@ -387,7 +387,7 @@
 //     // Menyimpan pesan
 //     public function sendMessage(Request $request) {
 //         $request->validate([
-//             'receiver_id' => 'required|numeric', 
+//             'receiver_id' => 'required|numeric',
 //             'message' => 'required|string'
 //         ]);
 
@@ -415,7 +415,7 @@
 //         // JIKA KE AI (receiver_id == 0) -> JANGAN SIMPAN KE DATABASE
 //         // Mencegah error Foreign Key Constraint Violation!
 //         // ==========================================================
-        
+
 //         // Panggil Gemini (Synchronous cepat)
 //         $userText = $request->message;
 //         $aiResponseText = $this->generateGeminiResponse($userText);
@@ -423,7 +423,7 @@
 //         // Buat objek dummy (tidak masuk DB) agar React bisa merendernya
 //         $dummyAiMessage = [
 //             'id' => time() . rand(100, 999), // ID virtual sementara
-//             'sender_id' => 0, 
+//             'sender_id' => 0,
 //             'receiver_id' => $myId,
 //             'message' => $aiResponseText,
 //             'created_at' => now()->toIso8601String()
@@ -432,7 +432,7 @@
 //         // Langsung kembalikan respons ke Frontend
 //         return response()->json([
 //             'status' => 'success',
-//             'ai_message' => $dummyAiMessage 
+//             'ai_message' => $dummyAiMessage
 //         ]);
 //     }
 
@@ -445,9 +445,9 @@
 //             // Ambil data produk sebagai bahan konteks AI
 //             $products = Product::where('status', 'active')
 //                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', 'is_bundle_active')
-//                 ->take(15) 
+//                 ->take(15)
 //                 ->get();
-            
+
 //             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
 //             foreach ($products as $p) {
 //                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
@@ -456,7 +456,7 @@
 //             $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan gaya bahasa 'halo', 'kak', dll. Jawablah pertanyaan berdasarkan data produk berikut. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora, tolak dengan sangat halus.\n\n" . $dbContext;
 
 //             $apiKey = env('GEMINI_API_KEY');
-            
+
 //             if (empty($apiKey)) {
 //                 return "Mohon maaf kak, kunci API AI belum dikonfigurasi di server kami (.env).";
 //             }
@@ -494,7 +494,7 @@
 
 // use App\Models\User;
 // use App\Models\Message;
-// use App\Models\Product; 
+// use App\Models\Product;
 // use App\Events\MessageSent;
 // use Illuminate\Http\Request;
 // use Illuminate\Support\Facades\Log;
@@ -528,7 +528,7 @@
 //     // Menyimpan pesan
 //     public function sendMessage(Request $request) {
 //         $request->validate([
-//             'receiver_id' => 'required|exists:users,id', 
+//             'receiver_id' => 'required|exists:users,id',
 //             'message' => 'required|string'
 //         ]);
 
@@ -546,7 +546,7 @@
 //         // JIKA PENERIMA ADALAH AI
 //         // ==========================================================
 //         if ($receiver->usertype === 'ai') {
-            
+
 //             // Panggil Gemini (Membaca pesan user)
 //             $aiResponseText = $this->generateGeminiResponse($request->message);
 
@@ -564,16 +564,16 @@
 //             return response()->json([
 //                 'status' => 'success',
 //                 'user_message' => $userMessage,
-//                 'ai_message' => $aiMessage 
+//                 'ai_message' => $aiMessage
 //             ]);
-//         } 
-        
+//         }
+
 //         // ==========================================================
 //         // JIKA PENERIMA ADALAH MANUSIA (Admin)
 //         // ==========================================================
 //         else {
 //             broadcast(new MessageSent($userMessage))->toOthers();
-            
+
 //             return response()->json([
 //                 'status' => 'success',
 //                 'user_message' => $userMessage
@@ -589,9 +589,9 @@
 //         try {
 //             $products = Product::where('status', 'active')
 //                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', "is_bundle_active")
-//                 ->take(15) 
+//                 ->take(15)
 //                 ->get();
-            
+
 //             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
 //             foreach ($products as $p) {
 //                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
@@ -600,7 +600,7 @@
 //             $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (gunakan gaya bahasa 'halo', 'kak', dll). Jawablah pertanyaan pengguna berdasarkan data produk berikut ini. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora atau pertanyaan tidak jelas, tolak dengan sangat halus atau tawarkan untuk dihubungkan ke admin manusia.\n\n" . $dbContext;
 
 //             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            
+
 //             if (empty($apiKey)) {
 //                 return "Maaf kak, kunci API AI belum dikonfigurasi oleh administrator di server.";
 //             }
@@ -637,7 +637,7 @@
 
 // use App\Models\User;
 // use App\Models\Message;
-// use App\Models\Product; 
+// use App\Models\Product;
 // use App\Events\MessageSent;
 // use Illuminate\Http\Request;
 // use Illuminate\Support\Facades\Log;
@@ -647,7 +647,7 @@
 // {
 //     // Mengambil daftar staf dan AI (Sistem Auto-Healing)
 //     public function getStaffList() {
-        
+
 //         // 1. AUTO-CREATE AI JIKA BELUM ADA (Menghindari error Tinker/Database)
 //         // Kita set usertype sebagai 'admin' agar lolos validasi ENUM database Anda
 //         $aiUser = User::firstOrCreate(
@@ -697,7 +697,7 @@
 //     // Menyimpan pesan
 //     public function sendMessage(Request $request) {
 //         $request->validate([
-//             'receiver_id' => 'required|exists:users,id', 
+//             'receiver_id' => 'required|exists:users,id',
 //             'message' => 'required|string'
 //         ]);
 
@@ -715,7 +715,7 @@
 //         // JIKA PENERIMA ADALAH AI (Dideteksi dari email)
 //         // ==========================================================
 //         if ($receiver->email === 'ai@gycora.com') {
-            
+
 //             // Panggil Gemini (Membaca pesan user)
 //             $aiResponseText = $this->generateGeminiResponse($request->message);
 
@@ -733,16 +733,16 @@
 //             return response()->json([
 //                 'status' => 'success',
 //                 'user_message' => $userMessage,
-//                 'ai_message' => $aiMessage 
+//                 'ai_message' => $aiMessage
 //             ]);
-//         } 
-        
+//         }
+
 //         // ==========================================================
 //         // JIKA PENERIMA ADALAH MANUSIA (Admin Manusia)
 //         // ==========================================================
 //         else {
 //             broadcast(new MessageSent($userMessage))->toOthers();
-            
+
 //             return response()->json([
 //                 'status' => 'success',
 //                 'user_message' => $userMessage
@@ -759,9 +759,9 @@
 //             // Suplai data agar AI pintar menjawab pertanyaan produk
 //             $products = Product::where('status', 'active')
 //                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', 'is_bundle_active')
-//                 ->take(15) 
+//                 ->take(15)
 //                 ->get();
-            
+
 //             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
 //             foreach ($products as $p) {
 //                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
@@ -770,7 +770,7 @@
 //             $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (gunakan gaya bahasa 'halo', 'kak', dll). Jawablah pertanyaan pengguna berdasarkan data produk berikut ini. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora atau pertanyaan tidak jelas, tolak dengan sangat halus atau tawarkan untuk dihubungkan ke admin manusia.\n\n" . $dbContext;
 
 //             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            
+
 //             if (empty($apiKey)) {
 //                 return "Maaf kak, kunci API AI belum dikonfigurasi oleh administrator di server.";
 //             }
@@ -803,11 +803,180 @@
 //     }
 // }
 
+// namespace App\Http\Controllers;
+
+// use App\Models\User;
+// use App\Models\Message;
+// use App\Models\Product;
+// use App\Events\MessageSent;
+// use Illuminate\Http\Request;
+// use Illuminate\Support\Facades\Log;
+// use Illuminate\Support\Facades\Http;
+
+// class ChatController extends Controller
+// {
+//     // Mengambil daftar staf dan AI (Sistem Auto-Healing + Force Array)
+//     public function getStaffList() {
+
+//         // 1. AUTO-CREATE AI JIKA BELUM ADA
+//         $aiUser = User::firstOrCreate(
+//             ['email' => 'ai@gycora.com'],
+//             [
+//                 'first_name' => 'Gycora',
+//                 'last_name' => 'AI Assistant',
+//                 'password' => bcrypt('password_rahasia_ai_123'),
+//                 'usertype' => 'admin', // Disimpan sebagai admin agar lolos database
+//                 'phone' => '00000000000'
+//             ]
+//         );
+
+//         // 2. Tarik Admin Manusia dan AI dari database
+//         $staff = User::where('usertype', 'admin')
+//             ->orWhere('email', 'ai@gycora.com')
+//             ->get();
+
+//         // 3. "Sulap" data AI menggunakan MAP TO ARRAY agar tidak ditolak saat serialisasi JSON
+//         $staffArray = $staff->map(function ($user) {
+//             $data = $user->toArray();
+//             if ($data['email'] === 'ai@gycora.com') {
+//                 $data['usertype'] = 'ai'; // Mutlak terganti menjadi 'ai'
+//             }
+//             return $data;
+//         });
+
+//         // 4. Urutkan agar Gycora AI selalu tampil paling atas
+//         $staffArray = $staffArray->sortByDesc(function ($user) {
+//             return $user['usertype'] === 'ai' ? 1 : 0;
+//         })->values();
+
+//         return response()->json($staffArray);
+//     }
+
+//     // Mengambil histori pesan
+//     public function getMessages($userId) {
+//         $myId = auth()->id();
+//         $messages = Message::where(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $myId)->where('receiver_id', $userId);
+//         })->orWhere(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $userId)->where('receiver_id', $myId);
+//         })->orderBy('created_at', 'asc')->get();
+
+//         return response()->json($messages);
+//     }
+
+//     // Menyimpan pesan
+//     public function sendMessage(Request $request) {
+//         $request->validate([
+//             'receiver_id' => 'required|exists:users,id',
+//             'message' => 'required|string'
+//         ]);
+
+//         $myId = auth()->id();
+//         $receiver = User::findOrFail($request->receiver_id);
+
+//         // 1. Simpan pesan pengguna ke database
+//         $userMessage = Message::create([
+//             'sender_id' => $myId,
+//             'receiver_id' => $receiver->id,
+//             'message' => $request->message
+//         ]);
+
+//         // ==========================================================
+//         // JIKA PENERIMA ADALAH AI
+//         // ==========================================================
+//         if ($receiver->email === 'ai@gycora.com') {
+
+//             // Panggil Gemini (Membaca pesan user)
+//             $aiResponseText = $this->generateGeminiResponse($request->message);
+
+//             // 2. Simpan balasan AI ke database
+//             $aiMessage = Message::create([
+//                 'sender_id' => $receiver->id,
+//                 'receiver_id' => $myId,
+//                 'message' => $aiResponseText
+//             ]);
+
+//             // Broadcast pesan AI via Websocket
+//             broadcast(new MessageSent($aiMessage));
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'user_message' => $userMessage,
+//                 'ai_message' => $aiMessage
+//             ]);
+//         }
+
+//         // ==========================================================
+//         // JIKA PENERIMA ADALAH MANUSIA
+//         // ==========================================================
+//         else {
+//             broadcast(new MessageSent($userMessage))->toOthers();
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'user_message' => $userMessage
+//             ]);
+//         }
+//     }
+
+//     /**
+//      * Helper Function: Generate Balasan Gemini
+//      */
+//     private function generateGeminiResponse($userText)
+//     {
+//         try {
+//             $products = Product::where('status', 'active')
+//                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', 'is_bundle_active')
+//                 ->take(15)
+//                 ->get();
+
+//             $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
+//             foreach ($products as $p) {
+//                 $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
+//             }
+
+//             $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (gunakan gaya bahasa 'halo', 'kak', dll). Jawablah pertanyaan pengguna berdasarkan data produk berikut ini. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora atau pertanyaan tidak jelas, tolak dengan sangat halus.\n\n" . $dbContext;
+
+//             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
+
+//             if (empty($apiKey)) {
+//                 return "Maaf kak, kunci API AI belum dikonfigurasi oleh administrator di server.";
+//             }
+
+//             // [PERBAIKAN MODEL]: Pastikan menggunakan 1.5-flash (tidak ada versi 3.5)
+//             $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
+
+//             $payload = [
+//                 'system_instruction' => [
+//                     'parts' => [['text' => $systemInstruction]]
+//                 ],
+//                 'contents' => [
+//                     ['role' => 'user', 'parts' => [['text' => $userText]]]
+//                 ]
+//             ];
+
+//             $response = Http::timeout(15)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+
+//             if ($response->successful()) {
+//                 $data = $response->json();
+//                 return $data['candidates'][0]['content']['parts'][0]['text'] ?? "Maaf kak, saya sedang gagal memproses jawaban. Bisa ulangi pertanyaannya?";
+//             }
+
+//             Log::error('Gemini API Error: ' . $response->body());
+//             return "Maaf kak, koneksi otak AI saya sedang bermasalah. Mohon hubungi admin manusia kami ya.";
+
+//         } catch (\Exception $e) {
+//             Log::error('Gemini Exception: ' . $e->getMessage());
+//             return "Maaf kak, sistem AI sedang offline saat ini.";
+//         }
+//     }
+// }
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Message;
-use App\Models\Product; 
+use App\Models\Product;
 use App\Events\MessageSent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -817,7 +986,7 @@ class ChatController extends Controller
 {
     // Mengambil daftar staf dan AI (Sistem Auto-Healing + Force Array)
     public function getStaffList() {
-        
+
         // 1. AUTO-CREATE AI JIKA BELUM ADA
         $aiUser = User::firstOrCreate(
             ['email' => 'ai@gycora.com'],
@@ -865,9 +1034,9 @@ class ChatController extends Controller
     }
 
     // Menyimpan pesan
-    public function sendMessage(Request $request) {        
+    public function sendMessage(Request $request) {
         $request->validate([
-            'receiver_id' => 'required|exists:users,id', 
+            'receiver_id' => 'required|exists:users,id',
             'message' => 'required|string'
         ]);
 
@@ -885,7 +1054,7 @@ class ChatController extends Controller
         // JIKA PENERIMA ADALAH AI
         // ==========================================================
         if ($receiver->email === 'ai@gycora.com') {
-            
+
             // Panggil Gemini (Membaca pesan user)
             $aiResponseText = $this->generateGeminiResponse($request->message);
 
@@ -902,16 +1071,16 @@ class ChatController extends Controller
             return response()->json([
                 'status' => 'success',
                 'user_message' => $userMessage,
-                'ai_message' => $aiMessage 
+                'ai_message' => $aiMessage
             ]);
-        } 
-        
+        }
+
         // ==========================================================
         // JIKA PENERIMA ADALAH MANUSIA
         // ==========================================================
         else {
             broadcast(new MessageSent($userMessage))->toOthers();
-            
+
             return response()->json([
                 'status' => 'success',
                 'user_message' => $userMessage
@@ -927,24 +1096,54 @@ class ChatController extends Controller
         try {
             $products = Product::where('status', 'active')
                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', 'is_bundle_active')
-                ->take(15) 
+                ->take(15)
                 ->get();
-            
-            $dbContext = "Berikut adalah data produk Gycora saat ini:\n";
+
+            $dbContext = "DATA PRODUK GYCORA SAAT INI (REAL-TIME):\n";
             foreach ($products as $p) {
-                $dbContext .= "- {$p->name} (Harga: {$p->price}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
+                $harga = number_format($p->price, 0, ',', '.');
+                $dbContext .= "- {$p->name} (Harga: Rp {$harga}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
             }
 
-            $systemInstruction = "Kamu adalah Gycora AI, customer service yang ramah, sopan, dan informatif untuk website kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (gunakan gaya bahasa 'halo', 'kak', dll). Jawablah pertanyaan pengguna berdasarkan data produk berikut ini. Jangan merekomendasikan harga di luar data. Jika pengguna bertanya hal di luar produk Gycora atau pertanyaan tidak jelas, tolak dengan sangat halus.\n\n" . $dbContext;
+            // ====================================================================
+            // INJEKSI PENGETAHUAN HARDCODE (FAQ, Bantuan & Info Produk Gycora)
+            // ====================================================================
+            $hardcodedKnowledge = "
+            PENGETAHUAN PRODUK UNGGULAN:
+            1. Ethereal Glow Brush: Hairbrush anti-static dengan teknologi konduktif dan molekul karbon. Membantu rambut terasa lebih halus, rapi, dan mudah diatur dalam sekali sisir (mengurangi kusut dan mengembang). Cocok untuk semua jenis rambut (lurus, bergelombang). Aman untuk dipakai setiap hari. Bulu sisir fleksibel dan lembut (tidak sakit di kulit kepala) serta meminimalkan risiko rambut patah akibat gesekan. Cara membersihkan: gunakan air & sabun lembut, lalu keringkan.
+            2. Eco Serenity Scalp Care: Scalp massager yang membersihkan kulit kepala optimal (mengurangi tumpukan minyak/kotoran) dan memberi sensasi pijatan relaksasi. Bisa digunakan saat keramas atau saat rambut kering. Aman untuk kulit kepala sensitif berkat teeth (gigi sisir) yang lembut. Cara membersihkan: bilas air bersih & simpan di tempat kering.
+
+            BAHAN & KEAMANAN PRODUK:
+            - Aman untuk ibu hamil dan menyusui (formulasi tanpa Paraben dan SLS). Namun, tetap disarankan konsultasi ke dokter kandungan jika mencoba perawatan baru.
+            - Seluruh produk yang dijual adalah 100% Original.
+
+            PEMESANAN & PEMBAYARAN:
+            - Metode Pembayaran: Transfer Bank (BCA, Mandiri, BNI, BRI), Kartu Kredit/Debit, GoPay, OVO, ShopeePay, dan QRIS.
+            - Pembatalan/Perubahan: Hubungi Customer Service MAKSIMAL 1 jam setelah pembayaran. Jika lewat, pesanan langsung diproses sistem.
+
+            PENGIRIMAN (SHIPPING):
+            - Jangkauan: Seluruh Indonesia (belum melayani internasional).
+            - Estimasi Waktu: Jabodetabek (1-3 hari kerja), Luar Jawa (3-7 hari kerja) menyesuaikan ekspedisi.
+            - Pelacakan: Nomor resi dikirim via email dan bisa dilacak di menu 'Order' pada akun.
+
+            KEBIJAKAN RETUR & KOMPLAIN:
+            - Keluhan Barang Rusak/Tidak Sesuai: Harap hubungi tim support MAKSIMAL 1x24 jam sejak diterima. WAJIB menyertakan Video Unboxing dan foto produk.
+            - Batas waktu pengembalian barang umum: 14 hari sejak diterima (sesuai ketentuan di halaman Return Policy).
+            ";
+
+            // ====================================================================
+            // BANGUN SYSTEM PROMPT
+            // ====================================================================
+            $systemInstruction = "Kamu adalah Gycora AI, asisten virtual dan customer service yang ramah, sopan, dan informatif untuk brand kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (panggil pelanggan dengan sapaan 'Kak').\n\nTUGAS UTAMA:\nJawab pertanyaan pengguna berdasarkan 'PENGETAHUAN PRODUK & KEBIJAKAN' serta 'DATA PRODUK GYCORA' yang disediakan. Ingatkan tentang video unboxing jika ada kendala pengiriman. Jangan merekomendasikan harga atau khasiat di luar data. Jika pengguna bertanya hal di luar produk Gycora atau tidak jelas, tolak dengan sangat halus.\n\n" . $hardcodedKnowledge . "\n\n" . $dbContext;
 
             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            
+
             if (empty($apiKey)) {
                 return "Maaf kak, kunci API AI belum dikonfigurasi oleh administrator di server.";
             }
 
-            // [PERBAIKAN MODEL]: Pastikan menggunakan 1.5-flash (tidak ada versi 3.5)
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
+            // [PERBAIKAN MODEL]: Menyesuaikan URL ke versi 1.5-flash agar valid dan tidak error
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
 
             $payload = [
                 'system_instruction' => [
@@ -952,7 +1151,10 @@ class ChatController extends Controller
                 ],
                 'contents' => [
                     ['role' => 'user', 'parts' => [['text' => $userText]]]
-                ]
+                ],
+                'generationConfig' => [
+                    'temperature' => 0.4, // Suhu diatur rendah agar respons AI tetap akurat dan faktual
+                ],
             ];
 
             $response = Http::timeout(15)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
