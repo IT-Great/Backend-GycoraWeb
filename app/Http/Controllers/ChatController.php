@@ -1428,7 +1428,7 @@ class ChatController extends Controller
 
         return response()->json($staffArray);
     }
-    
+
 
     // Mengambil histori pesan
     public function getMessages($userId) {
@@ -1577,7 +1577,7 @@ class ChatController extends Controller
                 return "Maaf kak, kunci API AI belum dikonfigurasi.";
             }
 
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
 
             // ====================================================================
             // [BARU] 1. DEKLARASI ALAT/FUNGSI UNTUK AI (FUNCTION DECLARATION)
