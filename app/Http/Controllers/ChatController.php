@@ -972,6 +972,208 @@
 //     }
 // }
 
+// namespace App\Http\Controllers;
+
+// use App\Models\User;
+// use App\Models\Message;
+// use App\Models\Product;
+// use App\Events\MessageSent;
+// use Illuminate\Http\Request;
+// use Illuminate\Support\Facades\Log;
+// use Illuminate\Support\Facades\Http;
+
+// class ChatController extends Controller
+// {
+//     // Mengambil daftar staf dan AI (Sistem Auto-Healing + Force Array)
+//     public function getStaffList() {
+
+//         // 1. AUTO-CREATE AI JIKA BELUM ADA
+//         $aiUser = User::firstOrCreate(
+//             ['email' => 'ai@gycora.com'],
+//             [
+//                 'first_name' => 'Gycora',
+//                 'last_name' => 'AI Assistant',
+//                 'password' => bcrypt('password_rahasia_ai_123'),
+//                 'usertype' => 'admin', // Disimpan sebagai admin agar lolos database
+//                 'phone' => '00000000000'
+//             ]
+//         );
+
+//         // 2. Tarik Admin Manusia dan AI dari database
+//         $staff = User::where('usertype', 'admin')
+//             ->orWhere('email', 'ai@gycora.com')
+//             ->get();
+
+//         // 3. "Sulap" data AI menggunakan MAP TO ARRAY agar tidak ditolak saat serialisasi JSON
+//         $staffArray = $staff->map(function ($user) {
+//             $data = $user->toArray();
+//             if ($data['email'] === 'ai@gycora.com') {
+//                 $data['usertype'] = 'ai'; // Mutlak terganti menjadi 'ai'
+//             }
+//             return $data;
+//         });
+
+//         // 4. Urutkan agar Gycora AI selalu tampil paling atas
+//         $staffArray = $staffArray->sortByDesc(function ($user) {
+//             return $user['usertype'] === 'ai' ? 1 : 0;
+//         })->values();
+
+//         return response()->json($staffArray);
+//     }
+
+//     // Mengambil histori pesan
+//     public function getMessages($userId) {
+//         $myId = auth()->id();
+//         $messages = Message::where(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $myId)->where('receiver_id', $userId);
+//         })->orWhere(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $userId)->where('receiver_id', $myId);
+//         })->orderBy('created_at', 'asc')->get();
+
+//         return response()->json($messages);
+//     }
+
+//     // Menyimpan pesan
+//     public function sendMessage(Request $request) {
+//         $request->validate([
+//             'receiver_id' => 'required|exists:users,id',
+//             'message' => 'required|string'
+//         ]);
+
+//         $myId = auth()->id();
+//         $receiver = User::findOrFail($request->receiver_id);
+
+//         // 1. Simpan pesan pengguna ke database
+//         $userMessage = Message::create([
+//             'sender_id' => $myId,
+//             'receiver_id' => $receiver->id,
+//             'message' => $request->message
+//         ]);
+
+//         // ==========================================================
+//         // JIKA PENERIMA ADALAH AI
+//         // ==========================================================
+//         if ($receiver->email === 'ai@gycora.com') {
+
+//             // Panggil Gemini (Membaca pesan user)
+//             $aiResponseText = $this->generateGeminiResponse($request->message);
+
+//             // 2. Simpan balasan AI ke database
+//             $aiMessage = Message::create([
+//                 'sender_id' => $receiver->id,
+//                 'receiver_id' => $myId,
+//                 'message' => $aiResponseText
+//             ]);
+
+//             // Broadcast pesan AI via Websocket
+//             broadcast(new MessageSent($aiMessage));
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'user_message' => $userMessage,
+//                 'ai_message' => $aiMessage
+//             ]);
+//         }
+
+//         // ==========================================================
+//         // JIKA PENERIMA ADALAH MANUSIA
+//         // ==========================================================
+//         else {
+//             broadcast(new MessageSent($userMessage))->toOthers();
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'user_message' => $userMessage
+//             ]);
+//         }
+//     }
+
+//     /**
+//      * Helper Function: Generate Balasan Gemini
+//      */
+//     private function generateGeminiResponse($userText)
+//     {
+//         try {
+//             $products = Product::where('status', 'active')
+//                 ->select('name', 'price', 'discount_price', 'wholesale_price', 'bundle_price', 'stock', 'description', 'is_bundle_active')
+//                 ->take(15)
+//                 ->get();
+
+//             $dbContext = "DATA PRODUK GYCORA SAAT INI (REAL-TIME):\n";
+//             foreach ($products as $p) {
+//                 $harga = number_format($p->price, 0, ',', '.');
+//                 $dbContext .= "- {$p->name} (Harga: Rp {$harga}, Stok: {$p->stock}, Deskripsi: {$p->description})\n";
+//             }
+
+//             // ====================================================================
+//             // INJEKSI PENGETAHUAN HARDCODE (FAQ, Bantuan & Info Produk Gycora)
+//             // ====================================================================
+//             $hardcodedKnowledge = "
+//             PENGETAHUAN PRODUK UNGGULAN:
+//             1. Ethereal Glow Brush: Hairbrush anti-static dengan teknologi konduktif dan molekul karbon. Membantu rambut terasa lebih halus, rapi, dan mudah diatur dalam sekali sisir (mengurangi kusut dan mengembang). Cocok untuk semua jenis rambut (lurus, bergelombang). Aman untuk dipakai setiap hari. Bulu sisir fleksibel dan lembut (tidak sakit di kulit kepala) serta meminimalkan risiko rambut patah akibat gesekan. Cara membersihkan: gunakan air & sabun lembut, lalu keringkan.
+//             2. Eco Serenity Scalp Care: Scalp massager yang membersihkan kulit kepala optimal (mengurangi tumpukan minyak/kotoran) dan memberi sensasi pijatan relaksasi. Bisa digunakan saat keramas atau saat rambut kering. Aman untuk kulit kepala sensitif berkat teeth (gigi sisir) yang lembut. Cara membersihkan: bilas air bersih & simpan di tempat kering.
+
+//             BAHAN & KEAMANAN PRODUK:
+//             - Aman untuk ibu hamil dan menyusui (formulasi tanpa Paraben dan SLS). Namun, tetap disarankan konsultasi ke dokter kandungan jika mencoba perawatan baru.
+//             - Seluruh produk yang dijual adalah 100% Original.
+
+//             PEMESANAN & PEMBAYARAN:
+//             - Metode Pembayaran: Transfer Bank (BCA, Mandiri, BNI, BRI), Kartu Kredit/Debit, GoPay, OVO, ShopeePay, dan QRIS.
+//             - Pembatalan/Perubahan: Hubungi Customer Service MAKSIMAL 1 jam setelah pembayaran. Jika lewat, pesanan langsung diproses sistem.
+
+//             PENGIRIMAN (SHIPPING):
+//             - Jangkauan: Seluruh Indonesia (belum melayani internasional).
+//             - Estimasi Waktu: Jabodetabek (1-3 hari kerja), Luar Jawa (3-7 hari kerja) menyesuaikan ekspedisi.
+//             - Pelacakan: Nomor resi dikirim via email dan bisa dilacak di menu 'Order' pada akun.
+
+//             KEBIJAKAN RETUR & KOMPLAIN:
+//             - Keluhan Barang Rusak/Tidak Sesuai: Harap hubungi tim support MAKSIMAL 1x24 jam sejak diterima. WAJIB menyertakan Video Unboxing dan foto produk.
+//             - Batas waktu pengembalian barang umum: 14 hari sejak diterima (sesuai ketentuan di halaman Return Policy).
+//             ";
+
+//             // ====================================================================
+//             // BANGUN SYSTEM PROMPT
+//             // ====================================================================
+//             $systemInstruction = "Kamu adalah Gycora AI, asisten virtual dan customer service yang ramah, sopan, dan informatif untuk brand kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (panggil pelanggan dengan sapaan 'Kak').\n\nTUGAS UTAMA:\nJawab pertanyaan pengguna berdasarkan 'PENGETAHUAN PRODUK & KEBIJAKAN' serta 'DATA PRODUK GYCORA' yang disediakan. Ingatkan tentang video unboxing jika ada kendala pengiriman. Jangan merekomendasikan harga atau khasiat di luar data. Jika pengguna bertanya hal di luar produk Gycora atau tidak jelas, tolak dengan sangat halus.\n\n" . $hardcodedKnowledge . "\n\n" . $dbContext;
+
+//             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
+
+//             if (empty($apiKey)) {
+//                 return "Maaf kak, kunci API AI belum dikonfigurasi oleh administrator di server.";
+//             }
+
+//             // [PERBAIKAN MODEL]: Menyesuaikan URL ke versi 1.5-flash agar valid dan tidak error
+//             $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+
+//             $payload = [
+//                 'system_instruction' => [
+//                     'parts' => [['text' => $systemInstruction]]
+//                 ],
+//                 'contents' => [
+//                     ['role' => 'user', 'parts' => [['text' => $userText]]]
+//                 ],
+//                 'generationConfig' => [
+//                     'temperature' => 0.4, // Suhu diatur rendah agar respons AI tetap akurat dan faktual
+//                 ],
+//             ];
+
+//             $response = Http::timeout(15)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+
+//             if ($response->successful()) {
+//                 $data = $response->json();
+//                 return $data['candidates'][0]['content']['parts'][0]['text'] ?? "Maaf kak, saya sedang gagal memproses jawaban. Bisa ulangi pertanyaannya?";
+//             }
+
+//             Log::error('Gemini API Error: ' . $response->body());
+//             return "Maaf kak, koneksi otak AI saya sedang bermasalah. Mohon hubungi admin manusia kami ya.";
+
+//         } catch (\Exception $e) {
+//             Log::error('Gemini Exception: ' . $e->getMessage());
+//             return "Maaf kak, sistem AI sedang offline saat ini.";
+//         }
+//     }
+// }
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
@@ -1106,35 +1308,42 @@ class ChatController extends Controller
             }
 
             // ====================================================================
-            // INJEKSI PENGETAHUAN HARDCODE (FAQ, Bantuan & Info Produk Gycora)
+            // INJEKSI PENGETAHUAN HARDCODE (FAQ, TOS, Pengiriman, & Info Produk)
             // ====================================================================
             $hardcodedKnowledge = "
+            INFORMASI PERUSAHAAN & KONTAK:
+            - Nama: Gycora Essence
+            - WhatsApp: 082273736200 | Email: gycora.essence@gmail.com
+            - Alamat: Surabaya, Jawa Timur 60226, Indonesia
+
             PENGETAHUAN PRODUK UNGGULAN:
-            1. Ethereal Glow Brush: Hairbrush anti-static dengan teknologi konduktif dan molekul karbon. Membantu rambut terasa lebih halus, rapi, dan mudah diatur dalam sekali sisir (mengurangi kusut dan mengembang). Cocok untuk semua jenis rambut (lurus, bergelombang). Aman untuk dipakai setiap hari. Bulu sisir fleksibel dan lembut (tidak sakit di kulit kepala) serta meminimalkan risiko rambut patah akibat gesekan. Cara membersihkan: gunakan air & sabun lembut, lalu keringkan.
-            2. Eco Serenity Scalp Care: Scalp massager yang membersihkan kulit kepala optimal (mengurangi tumpukan minyak/kotoran) dan memberi sensasi pijatan relaksasi. Bisa digunakan saat keramas atau saat rambut kering. Aman untuk kulit kepala sensitif berkat teeth (gigi sisir) yang lembut. Cara membersihkan: bilas air bersih & simpan di tempat kering.
+            1. Ethereal Glow Brush: Hairbrush anti-static dengan teknologi konduktif dan molekul karbon. Membantu rambut terasa lebih halus, rapi, dan mudah diatur dalam sekali sisir. Cocok untuk semua jenis rambut. Aman dipakai setiap hari. Bulu sisir fleksibel meminimalkan risiko rambut patah. Cara membersihkan: gunakan air & sabun lembut, lalu keringkan.
+            2. Eco Serenity Scalp Care: Scalp massager yang membersihkan kulit kepala optimal dan memberi sensasi pijatan relaksasi. Bisa digunakan saat keramas atau rambut kering. Cara membersihkan: bilas air bersih & simpan di tempat kering.
+            - Formulasi tanpa Paraben dan SLS, aman untuk ibu hamil/menyusui (disarankan konsultasi dokter). 100% Original.
 
-            BAHAN & KEAMANAN PRODUK:
-            - Aman untuk ibu hamil dan menyusui (formulasi tanpa Paraben dan SLS). Namun, tetap disarankan konsultasi ke dokter kandungan jika mencoba perawatan baru.
-            - Seluruh produk yang dijual adalah 100% Original.
+            PEMESANAN, PEMBAYARAN, & PRIVASI:
+            - Metode Pembayaran: Transfer Bank, Kartu Kredit/Debit, GoPay, OVO, ShopeePay, dan QRIS.
+            - Pembatalan/Perubahan: Hubungi Customer Service MAKSIMAL 1 jam setelah pembayaran.
+            - Privasi & Keamanan: Tunduk pada UU PDP Indonesia. Data pribadi aman, kami tidak menyimpan detail kartu kredit. Pengguna berhak mengakses atau meminta penghapusan data via email.
 
-            PEMESANAN & PEMBAYARAN:
-            - Metode Pembayaran: Transfer Bank (BCA, Mandiri, BNI, BRI), Kartu Kredit/Debit, GoPay, OVO, ShopeePay, dan QRIS.
-            - Pembatalan/Perubahan: Hubungi Customer Service MAKSIMAL 1 jam setelah pembayaran. Jika lewat, pesanan langsung diproses sistem.
+            PENGIRIMAN & LOGISTIK:
+            - Waktu Proses: 1 hari kerja (tidak termasuk akhir pekan/libur).
+            - Jangkauan: Domestik (Standar/Ekspres, tarif dihitung otomatis) & Internasional (Hubungi email untuk tarif; bea/pajak ditanggung pembeli).
+            - Pelacakan: Nomor resi dikirim via email, tunggu 1x24 jam untuk update sistem logistik.
+            - Kehilangan/Kerusakan Kurir: Gycora tidak bertanggung jawab atas paket yang hilang/rusak selama pengiriman oleh ekspedisi. Pembeli harus klaim langsung ke pihak kurir.
 
-            PENGIRIMAN (SHIPPING):
-            - Jangkauan: Seluruh Indonesia (belum melayani internasional).
-            - Estimasi Waktu: Jabodetabek (1-3 hari kerja), Luar Jawa (3-7 hari kerja) menyesuaikan ekspedisi.
-            - Pelacakan: Nomor resi dikirim via email dan bisa dilacak di menu 'Order' pada akun.
-
-            KEBIJAKAN RETUR & KOMPLAIN:
-            - Keluhan Barang Rusak/Tidak Sesuai: Harap hubungi tim support MAKSIMAL 1x24 jam sejak diterima. WAJIB menyertakan Video Unboxing dan foto produk.
-            - Batas waktu pengembalian barang umum: 14 hari sejak diterima (sesuai ketentuan di halaman Return Policy).
+            KEBIJAKAN RETUR & PENGEMBALIAN DANA (REFUND):
+            - Batas Waktu Retur: Maksimal 3 HARI setelah barang diterima.
+            - Syarat Mutlak: Wajib mengirimkan Video Unboxing TANPA EDITAN ke gycora.essence@gmail.com.
+            - Biaya Kirim Retur: Seluruh biaya pengiriman barang retur ditanggung oleh pembeli.
+            - Penukaran (Exchange): Tidak bisa tukar langsung. Pelanggan harus meretur barang, tunggu refund, lalu melakukan pesanan/pembelian baru.
+            - Proses Refund: Jika disetujui, dana dikembalikan otomatis ke metode pembayaran asli dalam maksimal 30 hari kerja. Hubungi email kami jika lebih dari 15 hari kerja dana belum masuk.
             ";
 
             // ====================================================================
             // BANGUN SYSTEM PROMPT
             // ====================================================================
-            $systemInstruction = "Kamu adalah Gycora AI, asisten virtual dan customer service yang ramah, sopan, dan informatif untuk brand kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional (panggil pelanggan dengan sapaan 'Kak').\n\nTUGAS UTAMA:\nJawab pertanyaan pengguna berdasarkan 'PENGETAHUAN PRODUK & KEBIJAKAN' serta 'DATA PRODUK GYCORA' yang disediakan. Ingatkan tentang video unboxing jika ada kendala pengiriman. Jangan merekomendasikan harga atau khasiat di luar data. Jika pengguna bertanya hal di luar produk Gycora atau tidak jelas, tolak dengan sangat halus.\n\n" . $hardcodedKnowledge . "\n\n" . $dbContext;
+            $systemInstruction = "Kamu adalah Gycora AI, asisten virtual dan customer service representatif untuk brand kecantikan Gycora. Gunakan bahasa Indonesia yang santai tapi profesional dan berempati (selalu panggil pengguna dengan sapaan 'Kak').\n\nTUGAS UTAMA:\nJawab pertanyaan pengguna secara akurat berdasarkan 'PENGETAHUAN PRODUK, TOS & KEBIJAKAN' serta 'DATA PRODUK GYCORA'. \n- Ingatkan tentang syarat ketat batas waktu 3 hari dan WAJIB video unboxing ke email jika ada keluhan pesanan.\n- Jika pengguna bertanya tarif internasional atau komplain lebih lanjut, arahkan ke email gycora.essence@gmail.com atau WA 082273736200.\n- JANGAN mengarang kebijakan atau harga di luar data yang diberikan. Tolak dengan halus jika ditanya hal di luar Gycora.\n\n" . $hardcodedKnowledge . "\n\n" . $dbContext;
 
             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
 
@@ -1153,7 +1362,7 @@ class ChatController extends Controller
                     ['role' => 'user', 'parts' => [['text' => $userText]]]
                 ],
                 'generationConfig' => [
-                    'temperature' => 0.4, // Suhu diatur rendah agar respons AI tetap akurat dan faktual
+                    'temperature' => 0.3, // Suhu diatur lebih rendah (0.3) agar AI sangat patuh pada dokumen kebijakan privasi & hukum
                 ],
             ];
 
@@ -1165,11 +1374,11 @@ class ChatController extends Controller
             }
 
             Log::error('Gemini API Error: ' . $response->body());
-            return "Maaf kak, koneksi otak AI saya sedang bermasalah. Mohon hubungi admin manusia kami ya.";
+            return "Maaf kak, koneksi otak AI saya sedang bermasalah. Mohon hubungi CS manusia kami di gycora.essence@gmail.com ya.";
 
         } catch (\Exception $e) {
             Log::error('Gemini Exception: ' . $e->getMessage());
-            return "Maaf kak, sistem AI sedang offline saat ini.";
+            return "Maaf kak, sistem AI sedang offline saat ini. Silakan hubungi WA 082273736200 untuk bantuan cepat.";
         }
     }
 }
