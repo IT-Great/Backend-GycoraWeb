@@ -1428,6 +1428,7 @@ class ChatController extends Controller
 
         return response()->json($staffArray);
     }
+    
 
     // Mengambil histori pesan
     public function getMessages($userId) {
