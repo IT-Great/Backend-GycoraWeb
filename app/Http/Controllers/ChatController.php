@@ -3514,7 +3514,7 @@ class ChatController extends Controller
 
             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
             // [PERBAIKAN] Menggunakan model -latest untuk mencegah Error 404
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' . $apiKey;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-latest:generateContent?key=' . $apiKey;
 
             $tools = [
                 ['functionDeclarations' => [
