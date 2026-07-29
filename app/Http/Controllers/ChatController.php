@@ -3752,7 +3752,7 @@ class ChatController extends Controller
             2. Jika pengguna melacak pesanan/resi, panggil fungsi 'lacak_pesanan_database'.\n" . $hardcodedKnowledge . "\n" . $dbContext;
 
             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' . $apiKey;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-latest:generateContent?key=' . $apiKey;
 
             $tools = [
                 ['functionDeclarations' => [
