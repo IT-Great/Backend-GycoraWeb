@@ -3353,6 +3353,8 @@ class ChatController extends Controller
                 return $parts['text'] ?? "Maaf kak, saya sedang gagal memproses jawaban biasa.";
             }
 
+            Log::error('Gemini API Error Asli: ' . $response->body());
+
             return "Maaf kak, sistem sedang sibuk. Mohon tunggu admin kami membalas ya.";
 
         } catch (\Exception $e) {
