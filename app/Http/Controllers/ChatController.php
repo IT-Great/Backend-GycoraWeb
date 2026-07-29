@@ -3080,12 +3080,298 @@
 
 // MOdifikasi ke 1 akun admin dengan implementasi AI
 
+// namespace App\Http\Controllers;
+
+// use App\Models\User;
+// use App\Models\Message;
+// use App\Models\Product;
+// use App\Models\Transaction;
+// use App\Events\MessageSent;
+// use Illuminate\Http\Request;
+// use Illuminate\Support\Facades\Log;
+// use Illuminate\Support\Facades\Http;
+// use Illuminate\Support\Facades\Cache; // [BARU] Import Cache untuk mode Handoff
+
+// class ChatController extends Controller
+// {
+//     // 1. [PERBAIKAN] Mengambil daftar staf (Hanya memunculkan 1 akun resmi)
+//     public function getStaffList() {
+//         $supportUser = User::firstOrCreate(
+//             ['email' => 'support@gycora.com'],
+//             [
+//                 'first_name' => 'Gycora',
+//                 'last_name' => 'Care',
+//                 'password' => bcrypt('password_rahasia_ai_123'),
+//                 'usertype' => 'cs', // Role Customer Service
+//                 'phone' => '00000000000'
+//             ]
+//         );
+
+//         $supportUser->is_official = true;
+
+//         // Hanya mengembalikan 1 akun Unified Inbox ke halaman customer
+//         return response()->json([$supportUser]);
+//     }
+
+//     // 2. [PERBAIKAN] Mengambil histori pesan (Admin Manusia menyamar jadi Gycora Care)
+//     public function getMessages($userId) {
+//         $myId = auth()->id();
+//         $me = User::find($myId);
+
+//         // Jika yang sedang login adalah ADMIN MANUSIA, paksa ID-nya menjadi Gycora Care
+//         if (in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
+//             $supportUser = User::where('email', 'support@gycora.com')->first();
+//             if($supportUser) $myId = $supportUser->id;
+//         }
+
+//         $messages = Message::where(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $myId)->where('receiver_id', $userId);
+//         })->orWhere(function($q) use ($myId, $userId) {
+//             $q->where('sender_id', $userId)->where('receiver_id', $myId);
+//         })->orderBy('created_at', 'asc')->get();
+
+//         return response()->json($messages);
+//     }
+
+//     // 3. [PERBAIKAN] Menyimpan pesan & Logika Handoff AI
+//     public function sendMessage(Request $request) {
+//         $request->validate([
+//             'receiver_id' => 'required|exists:users,id',
+//             'message' => 'required|string'
+//         ]);
+
+//         $myId = auth()->id();
+//         $me = User::find($myId);
+//         $senderId = $myId;
+
+//         // Jika Admin manusia yang membalas, kirim atas nama Gycora Care
+//         if (in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
+//             $supportUser = User::where('email', 'support@gycora.com')->first();
+//             if($supportUser) $senderId = $supportUser->id;
+//         }
+
+//         $receiver = User::findOrFail($request->receiver_id);
+
+//         $userMessage = Message::create([
+//             'sender_id' => $senderId,
+//             'receiver_id' => $receiver->id,
+//             'message' => $request->message
+//         ]);
+
+//         // JIKA PENERIMA ADALAH AKUN RESMI GYCORA CARE & PENGIRIMNYA BUKAN ADMIN
+//         if ($receiver->email === 'support@gycora.com' && !in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
+
+//             // Cek apakah chat ini sedang dalam mode 'ai' atau 'human'
+//             $chatMode = Cache::get('chat_mode_' . $myId, 'ai');
+
+//             if ($chatMode === 'ai') {
+//                 $aiResponseText = $this->generateGeminiResponse($request->message, $myId);
+
+//                 if ($aiResponseText) {
+//                     $aiMessage = Message::create([
+//                         'sender_id' => $receiver->id,
+//                         'receiver_id' => $myId,
+//                         'message' => $aiResponseText
+//                     ]);
+
+//                     broadcast(new MessageSent($aiMessage))->toOthers();
+
+//                     return response()->json([
+//                         'status' => 'success',
+//                         'user_message' => $userMessage,
+//                         'ai_message' => $aiMessage
+//                     ]);
+//                 }
+//             }
+//             // Jika mode 'human', AI diam saja (Handoff), tunggu Admin manusia membalas di Panel Admin.
+//         }
+
+//         broadcast(new MessageSent($userMessage))->toOthers();
+//         return response()->json(['status' => 'success', 'user_message' => $userMessage]);
+//     }
+
+//     private function cekStatusPesananLokal($userId, $orderId = null)
+//     {
+//         $query = Transaction::where('user_id', $userId)->latest();
+//         if ($orderId) {
+//             $query->where('order_id', 'LIKE', '%' . $orderId . '%');
+//         }
+//         $transaction = $query->first();
+
+//         if (!$transaction) {
+//             return ['status' => 'error', 'message' => 'Data pesanan tidak ditemukan di sistem.'];
+//         }
+
+//         $result = [
+//             'order_id' => $transaction->order_id,
+//             'status_pembayaran' => $transaction->status,
+//             'metode_pengiriman' => $transaction->shipping_method,
+//             'nomor_resi' => $transaction->tracking_number ?? 'Resi belum tersedia',
+//             'status_pengiriman' => $transaction->shipping_status ?? 'Menunggu diproses',
+//         ];
+
+//         if ($transaction->shipping_method === 'biteship' && $transaction->biteship_order_id) {
+//             try {
+//                 $res = Http::withHeaders(['Authorization' => config('services.biteship.api_key')])
+//                     ->get('https://api.biteship.com/v1/orders/' . $transaction->biteship_order_id);
+//                 if ($res->successful()) {
+//                     $biteshipData = $res->json();
+//                     $result['status_pengiriman'] = $biteshipData['status'] ?? $transaction->shipping_status;
+//                 }
+//             } catch (\Exception $e) {}
+//         }
+//         return $result;
+//     }
+
+//     // 4. [PERBAIKAN] Otak Gemini Hybrid (Ada tools Handoff)
+//     private function generateGeminiResponse($userText, $userId)
+//     {
+//         try {
+//             $products = Product::where('status', 'active')
+//                 ->select('name', 'price', 'stock', 'description')
+//                 ->take(15)->get();
+
+//             $dbContext = "DATA PRODUK GYCORA (REAL-TIME):\n";
+//             foreach ($products as $p) {
+//                 $harga = number_format($p->price, 0, ',', '.');
+//                 $dbContext .= "- {$p->name} (Rp {$harga}, Stok: {$p->stock})\n";
+//             }
+
+//             $hardcodedKnowledge = "
+//             INFO KONTAK: Gycora Essence. WA: 082273736200 | Email: gycora.essence@gmail.com
+//             KEBIJAKAN RETUR: Maksimal 3 HARI. Wajib Video Unboxing tanpa edit.
+//             ";
+
+//             $systemInstruction = "Kamu adalah Gycora Care, asisten virtual resmi Gycora. Sapa pengguna 'Kak'.
+//             TUGAS MUTLAK:
+//             1. JIKA pengguna secara eksplisit/jelas meminta bicara dengan ADMIN MANUSIA, atau jika keluhannya sangat marah/kompleks, WAJIB panggil fungsi 'transfer_to_human'.
+//             2. Jika melacak resi, panggil fungsi 'lacak_pesanan_database'.\n" . $hardcodedKnowledge . "\n" . $dbContext;
+
+//             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
+//             if (empty($apiKey)) return "Maaf kak, kunci API AI belum dikonfigurasi.";
+
+//             $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
+
+//             // DAFTARKAN TOOLS
+//             $tools = [
+//                 [
+//                     'functionDeclarations' => [
+//                         [
+//                             'name' => 'lacak_pesanan_database',
+//                             'description' => 'Panggil saat melacak pesanan.',
+//                             'parameters' => ['type' => 'OBJECT', 'properties' => ['order_id' => ['type' => 'STRING']]]
+//                         ],
+//                         [
+//                             'name' => 'transfer_to_human',
+//                             'description' => 'Panggil fungsi ini jika pengguna minta ngobrol langsung sama admin/manusia.'
+//                         ]
+//                     ]
+//                 ]
+//             ];
+
+//             // Riwayat percakapan untuk konteks (ambil 5 pesan terakhir)
+//             $history = Message::where(function($q) use ($userId) {
+//                 $supportUser = User::where('email', 'support@gycora.com')->first();
+//                 $q->where('sender_id', $userId)->where('receiver_id', $supportUser->id);
+//             })->orWhere(function($q) use ($userId) {
+//                 $supportUser = User::where('email', 'support@gycora.com')->first();
+//                 $q->where('sender_id', $supportUser->id)->where('receiver_id', $userId);
+//             })->orderBy('created_at', 'desc')->take(6)->get()->reverse();
+
+//             $geminiContents = [];
+//             $lastRole = '';
+
+//             foreach ($history as $chat) {
+//                 if (empty(trim($chat->message))) continue;
+//                 $role = $chat->sender_id === $userId ? 'user' : 'model';
+
+//                 if ($role === $lastRole) {
+//                     $lastIndex = count($geminiContents) - 1;
+//                     $geminiContents[$lastIndex]['parts'][0]['text'] .= "\n".$chat->message;
+//                 } else {
+//                     $geminiContents[] = [
+//                         'role' => $role,
+//                         'parts' => [['text' => $chat->message]],
+//                     ];
+//                     $lastRole = $role;
+//                 }
+//             }
+
+//             // Tambahkan pesan terbaru user
+//             $geminiContents[] = ['role' => 'user', 'parts' => [['text' => $userText]]];
+
+//             $payload = [
+//                 'system_instruction' => ['parts' => [['text' => $systemInstruction]]],
+//                 'contents' => $geminiContents,
+//                 'tools' => $tools,
+//                 'generationConfig' => ['temperature' => 0.4],
+//             ];
+
+//             $response = Http::timeout(20)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+
+//             if ($response->successful()) {
+//                 $data = $response->json();
+//                 $parts = $data['candidates'][0]['content']['parts'][0] ?? [];
+
+//                 if (isset($parts['functionCall'])) {
+//                     $functionCall = $parts['functionCall'];
+//                     $functionName = $functionCall['name'];
+//                     $args = $functionCall['args'] ?? [];
+
+//                     // EKSEKUSI: HANDOFF KE MANUSIA
+//                     if ($functionName === 'transfer_to_human') {
+//                         // Ubah mode ke Human selama 24 Jam
+//                         Cache::put('chat_mode_' . $userId, 'human', now()->addHours(24));
+//                         return "Baik Kak, mohon ditunggu sebentar ya. Saya sudah memanggil tim Admin Manusia kami. Mereka akan segera membalas pesan Kakak langsung di ruang obrolan ini 🙏";
+//                     }
+
+//                     // EKSEKUSI: LACAK PESANAN
+//                     if ($functionName === 'lacak_pesanan_database') {
+//                         $orderIdDicari = $args['order_id'] ?? null;
+//                         $hasilDatabase = $this->cekStatusPesananLokal($userId, $orderIdDicari);
+
+//                         $safeArgs = empty($args) ? new \stdClass() : json_decode(json_encode($args), false);
+//                         $safeResponse = json_decode(json_encode(['result' => $hasilDatabase]), false);
+
+//                         $geminiContents[] = ['role' => 'model', 'parts' => [['functionCall' => ['name' => $functionName, 'args' => $safeArgs]]]];
+//                         $geminiContents[] = ['role' => 'function', 'parts' => [['functionResponse' => ['name' => $functionName, 'response' => $safeResponse]]]];
+
+//                         $secondPayload = [
+//                             'system_instruction' => ['parts' => [['text' => $systemInstruction]]],
+//                             'tools' => $tools,
+//                             'contents' => $geminiContents,
+//                             'generationConfig' => ['temperature' => 0.4],
+//                         ];
+
+//                         $secondResponse = Http::timeout(20)->post($url, $secondPayload);
+//                         if ($secondResponse->successful()) {
+//                             return $secondResponse->json('candidates.0.content.parts.0.text') ?? "Maaf kak, saya gagal menerjemahkan data pesanannya.";
+//                         }
+//                     }
+//                 }
+
+//                 return $parts['text'] ?? "Maaf kak, saya sedang gagal memproses jawaban biasa.";
+//             }
+
+//             Log::error('Gemini API Error Asli: ' . $response->body());
+
+//             return "Maaf kak, sistem sedang sibuk. Mohon tunggu admin kami membalas ya.";
+
+//         } catch (\Exception $e) {
+//             Log::error('Gemini Exception: ' . $e->getMessage());
+//             return "Maaf kak, asisten AI sedang offline. Pesan kakak akan dibalas oleh tim kami segera.";
+//         }
+//     }
+// }
+
+<?php
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Message;
 use App\Models\Product;
-use App\Models\Transaction;
+use App\Models\Transaction; 
 use App\Events\MessageSent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -3094,143 +3380,124 @@ use Illuminate\Support\Facades\Cache; // [BARU] Import Cache untuk mode Handoff
 
 class ChatController extends Controller
 {
-    // 1. [PERBAIKAN] Mengambil daftar staf (Hanya memunculkan 1 akun resmi)
+    // 1. [PERBAIKAN] Mengambil daftar staf (Unified Inbox Gycora Care)
     public function getStaffList() {
-        $supportUser = User::firstOrCreate(
-            ['email' => 'support@gycora.com'],
-            [
-                'first_name' => 'Gycora',
-                'last_name' => 'Care',
-                'password' => bcrypt('password_rahasia_ai_123'),
-                'usertype' => 'cs', // Role Customer Service
-                'phone' => '00000000000'
-            ]
+        
+        $aiUser = User::firstOrCreate(
+            ['email' => 'ai@gycora.com'],
+            ['first_name' => 'Gycora', 'last_name' => 'AI Assistant', 'password' => bcrypt('password_rahasia_ai_123'), 'usertype' => 'admin', 'phone' => '00000000000']
         );
 
-        $supportUser->is_official = true;
+        // Ambil salah satu admin utama sebagai "wajah" dari Gycora Care
+        $mainAdmin = User::where('email', '!=', 'ai@gycora.com')->where('usertype', 'admin')->first();
+        
+        if($mainAdmin) {
+            // Override virtual (tidak mengubah database) agar di frontend tampil elegan
+            $mainAdmin->first_name = "Gycora";
+            $mainAdmin->last_name = "Care";
+            $mainAdmin->usertype = "Official Account";
+            return response()->json([$mainAdmin]);
+        }
 
-        // Hanya mengembalikan 1 akun Unified Inbox ke halaman customer
-        return response()->json([$supportUser]);
+        return response()->json([$aiUser]);
     }
 
-    // 2. [PERBAIKAN] Mengambil histori pesan (Admin Manusia menyamar jadi Gycora Care)
+    // 2. [PERBAIKAN] Mengambil histori pesan (Menarik pesan gabungan Admin + AI)
     public function getMessages($userId) {
         $myId = auth()->id();
         $me = User::find($myId);
 
-        // Jika yang sedang login adalah ADMIN MANUSIA, paksa ID-nya menjadi Gycora Care
-        if (in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
-            $supportUser = User::where('email', 'support@gycora.com')->first();
-            if($supportUser) $myId = $supportUser->id;
-        }
+        // Kumpulkan semua ID Admin dan AI dalam satu wadah
+        $adminIds = User::where('usertype', 'admin')->pluck('id')->toArray();
 
-        $messages = Message::where(function($q) use ($myId, $userId) {
-            $q->where('sender_id', $myId)->where('receiver_id', $userId);
-        })->orWhere(function($q) use ($myId, $userId) {
-            $q->where('sender_id', $userId)->where('receiver_id', $myId);
-        })->orderBy('created_at', 'asc')->get();
+        if ($me->usertype === 'user') {
+            // Jika pelanggan: Ambil semua pesan antara dia dan SELURUH admin/AI
+            $messages = Message::where(function($q) use ($myId, $adminIds) {
+                $q->where('sender_id', $myId)->whereIn('receiver_id', $adminIds);
+            })->orWhere(function($q) use ($myId, $adminIds) {
+                $q->whereIn('sender_id', $adminIds)->where('receiver_id', $myId);
+            })->with('sender')->orderBy('created_at', 'asc')->get();
+        } else {
+            // Jika Admin: Ambil semua pesan antara pelanggan tsb dan SELURUH admin/AI
+            $messages = Message::where(function($q) use ($userId, $adminIds) {
+                $q->whereIn('sender_id', $adminIds)->where('receiver_id', $userId);
+            })->orWhere(function($q) use ($userId, $adminIds) {
+                $q->where('sender_id', $userId)->whereIn('receiver_id', $adminIds);
+            })->with('sender')->orderBy('created_at', 'asc')->get();
+        }
 
         return response()->json($messages);
     }
 
-    // 3. [PERBAIKAN] Menyimpan pesan & Logika Handoff AI
-    public function sendMessage(Request $request) {
-        $request->validate([
-            'receiver_id' => 'required|exists:users,id',
-            'message' => 'required|string'
-        ]);
+    // 3. [PERBAIKAN] Menyimpan pesan & Logika Handoff AI Cerdas
+    public function sendMessage(Request $request) {        
+        $request->validate(['receiver_id' => 'required|exists:users,id', 'message' => 'required|string']);
 
         $myId = auth()->id();
         $me = User::find($myId);
-        $senderId = $myId;
-
-        // Jika Admin manusia yang membalas, kirim atas nama Gycora Care
-        if (in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
-            $supportUser = User::where('email', 'support@gycora.com')->first();
-            if($supportUser) $senderId = $supportUser->id;
-        }
-
         $receiver = User::findOrFail($request->receiver_id);
 
         $userMessage = Message::create([
-            'sender_id' => $senderId,
+            'sender_id' => $myId,
             'receiver_id' => $receiver->id,
             'message' => $request->message
         ]);
 
-        // JIKA PENERIMA ADALAH AKUN RESMI GYCORA CARE & PENGIRIMNYA BUKAN ADMIN
-        if ($receiver->email === 'support@gycora.com' && !in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
+        // Broadcast pesan asli ke Websocket (Sertakan relasi sender agar UI mendeteksi warnanya)
+        broadcast(new MessageSent($userMessage->load('sender')))->toOthers();
 
-            // Cek apakah chat ini sedang dalam mode 'ai' atau 'human'
+        // LOGIKA HYBRID: Memicu AI HANYA jika Pelanggan mengirim pesan ke Admin
+        if ($me->usertype === 'user' && $receiver->usertype === 'admin') {
+            
+            // Cek mode chat (Default: ai)
             $chatMode = Cache::get('chat_mode_' . $myId, 'ai');
 
             if ($chatMode === 'ai') {
+                $aiUser = User::where('email', 'ai@gycora.com')->first();
                 $aiResponseText = $this->generateGeminiResponse($request->message, $myId);
 
                 if ($aiResponseText) {
                     $aiMessage = Message::create([
-                        'sender_id' => $receiver->id,
+                        'sender_id' => $aiUser->id,
                         'receiver_id' => $myId,
                         'message' => $aiResponseText
                     ]);
 
-                    broadcast(new MessageSent($aiMessage))->toOthers();
+                    broadcast(new MessageSent($aiMessage->load('sender')))->toOthers();
 
                     return response()->json([
                         'status' => 'success',
-                        'user_message' => $userMessage,
-                        'ai_message' => $aiMessage
+                        'user_message' => $userMessage->load('sender'),
+                        'ai_message' => $aiMessage->load('sender') 
                     ]);
                 }
-            }
-            // Jika mode 'human', AI diam saja (Handoff), tunggu Admin manusia membalas di Panel Admin.
-        }
-
-        broadcast(new MessageSent($userMessage))->toOthers();
-        return response()->json(['status' => 'success', 'user_message' => $userMessage]);
+            } 
+            // Jika mode = 'human', AI diam (Handoff berhasil)
+        } 
+        
+        return response()->json(['status' => 'success', 'user_message' => $userMessage->load('sender')]);
     }
 
-    private function cekStatusPesananLokal($userId, $orderId = null)
-    {
+    private function cekStatusPesananLokal($userId, $orderId = null) {
         $query = Transaction::where('user_id', $userId)->latest();
-        if ($orderId) {
-            $query->where('order_id', 'LIKE', '%' . $orderId . '%');
-        }
+        if ($orderId) { $query->where('order_id', 'LIKE', '%' . $orderId . '%'); }
         $transaction = $query->first();
 
-        if (!$transaction) {
-            return ['status' => 'error', 'message' => 'Data pesanan tidak ditemukan di sistem.'];
-        }
+        if (!$transaction) { return ['status' => 'error', 'message' => 'Data pesanan tidak ditemukan di sistem.']; }
 
         $result = [
             'order_id' => $transaction->order_id,
             'status_pembayaran' => $transaction->status,
-            'metode_pengiriman' => $transaction->shipping_method,
             'nomor_resi' => $transaction->tracking_number ?? 'Resi belum tersedia',
             'status_pengiriman' => $transaction->shipping_status ?? 'Menunggu diproses',
         ];
-
-        if ($transaction->shipping_method === 'biteship' && $transaction->biteship_order_id) {
-            try {
-                $res = Http::withHeaders(['Authorization' => config('services.biteship.api_key')])
-                    ->get('https://api.biteship.com/v1/orders/' . $transaction->biteship_order_id);
-                if ($res->successful()) {
-                    $biteshipData = $res->json();
-                    $result['status_pengiriman'] = $biteshipData['status'] ?? $transaction->shipping_status;
-                }
-            } catch (\Exception $e) {}
-        }
         return $result;
     }
 
-    // 4. [PERBAIKAN] Otak Gemini Hybrid (Ada tools Handoff)
-    private function generateGeminiResponse($userText, $userId)
-    {
+    // 4. Otak Gemini Hybrid (Ada fungsi Handoff ke Manusia)
+    private function generateGeminiResponse($userText, $userId) {
         try {
-            $products = Product::where('status', 'active')
-                ->select('name', 'price', 'stock', 'description')
-                ->take(15)->get();
-
+            $products = Product::where('status', 'active')->take(15)->get();
             $dbContext = "DATA PRODUK GYCORA (REAL-TIME):\n";
             foreach ($products as $p) {
                 $harga = number_format($p->price, 0, ',', '.');
@@ -3244,68 +3511,45 @@ class ChatController extends Controller
 
             $systemInstruction = "Kamu adalah Gycora Care, asisten virtual resmi Gycora. Sapa pengguna 'Kak'.
             TUGAS MUTLAK:
-            1. JIKA pengguna secara eksplisit/jelas meminta bicara dengan ADMIN MANUSIA, atau jika keluhannya sangat marah/kompleks, WAJIB panggil fungsi 'transfer_to_human'.
-            2. Jika melacak resi, panggil fungsi 'lacak_pesanan_database'.\n" . $hardcodedKnowledge . "\n" . $dbContext;
+            1. JIKA pengguna secara eksplisit/jelas meminta bicara dengan ADMIN MANUSIA, atau keluhannya sangat marah/kompleks, WAJIB panggil fungsi 'transfer_to_human'.
+            2. Jika pengguna melacak pesanan/resi, panggil fungsi 'lacak_pesanan_database'.\n" . $hardcodedKnowledge . "\n" . $dbContext;
 
             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            if (empty($apiKey)) return "Maaf kak, kunci API AI belum dikonfigurasi.";
+            // [PERBAIKAN] Menggunakan model -latest untuk mencegah Error 404
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' . $apiKey;
 
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
-
-            // DAFTARKAN TOOLS
             $tools = [
-                [
-                    'functionDeclarations' => [
-                        [
-                            'name' => 'lacak_pesanan_database',
-                            'description' => 'Panggil saat melacak pesanan.',
-                            'parameters' => ['type' => 'OBJECT', 'properties' => ['order_id' => ['type' => 'STRING']]]
-                        ],
-                        [
-                            'name' => 'transfer_to_human',
-                            'description' => 'Panggil fungsi ini jika pengguna minta ngobrol langsung sama admin/manusia.'
-                        ]
-                    ]
-                ]
+                ['functionDeclarations' => [
+                    ['name' => 'lacak_pesanan_database', 'description' => 'Panggil saat melacak pesanan.', 'parameters' => ['type' => 'OBJECT', 'properties' => ['order_id' => ['type' => 'STRING']]]],
+                    ['name' => 'transfer_to_human', 'description' => 'Panggil fungsi ini jika pengguna minta bicara dengan admin asli.']
+                ]]
             ];
 
-            // Riwayat percakapan untuk konteks (ambil 5 pesan terakhir)
-            $history = Message::where(function($q) use ($userId) {
-                $supportUser = User::where('email', 'support@gycora.com')->first();
-                $q->where('sender_id', $userId)->where('receiver_id', $supportUser->id);
-            })->orWhere(function($q) use ($userId) {
-                $supportUser = User::where('email', 'support@gycora.com')->first();
-                $q->where('sender_id', $supportUser->id)->where('receiver_id', $userId);
+            // Riwayat percakapan untuk konteks AI
+            $adminIds = User::where('usertype', 'admin')->pluck('id')->toArray();
+            $history = Message::where(function($q) use ($userId, $adminIds) {
+                $q->where('sender_id', $userId)->whereIn('receiver_id', $adminIds);
+            })->orWhere(function($q) use ($userId, $adminIds) {
+                $q->whereIn('sender_id', $adminIds)->where('receiver_id', $userId);
             })->orderBy('created_at', 'desc')->take(6)->get()->reverse();
 
             $geminiContents = [];
             $lastRole = '';
-
             foreach ($history as $chat) {
                 if (empty(trim($chat->message))) continue;
                 $role = $chat->sender_id === $userId ? 'user' : 'model';
-
                 if ($role === $lastRole) {
                     $lastIndex = count($geminiContents) - 1;
                     $geminiContents[$lastIndex]['parts'][0]['text'] .= "\n".$chat->message;
                 } else {
-                    $geminiContents[] = [
-                        'role' => $role,
-                        'parts' => [['text' => $chat->message]],
-                    ];
+                    $geminiContents[] = ['role' => $role, 'parts' => [['text' => $chat->message]]];
                     $lastRole = $role;
                 }
             }
 
-            // Tambahkan pesan terbaru user
             $geminiContents[] = ['role' => 'user', 'parts' => [['text' => $userText]]];
 
-            $payload = [
-                'system_instruction' => ['parts' => [['text' => $systemInstruction]]],
-                'contents' => $geminiContents,
-                'tools' => $tools,
-                'generationConfig' => ['temperature' => 0.4],
-            ];
+            $payload = ['system_instruction' => ['parts' => [['text' => $systemInstruction]]], 'contents' => $geminiContents, 'tools' => $tools, 'generationConfig' => ['temperature' => 0.4]];
 
             $response = Http::timeout(20)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
@@ -3318,44 +3562,34 @@ class ChatController extends Controller
                     $functionName = $functionCall['name'];
                     $args = $functionCall['args'] ?? [];
 
-                    // EKSEKUSI: HANDOFF KE MANUSIA
+                    // EKSEKUSI 1: HANDOFF KE MANUSIA
                     if ($functionName === 'transfer_to_human') {
-                        // Ubah mode ke Human selama 24 Jam
                         Cache::put('chat_mode_' . $userId, 'human', now()->addHours(24));
                         return "Baik Kak, mohon ditunggu sebentar ya. Saya sudah memanggil tim Admin Manusia kami. Mereka akan segera membalas pesan Kakak langsung di ruang obrolan ini 🙏";
                     }
 
-                    // EKSEKUSI: LACAK PESANAN
+                    // EKSEKUSI 2: LACAK PESANAN (Dilengkapi Pelindung JSON)
                     if ($functionName === 'lacak_pesanan_database') {
-                        $orderIdDicari = $args['order_id'] ?? null;
-                        $hasilDatabase = $this->cekStatusPesananLokal($userId, $orderIdDicari);
+                        $hasilDatabase = $this->cekStatusPesananLokal($userId, $args['order_id'] ?? null);
 
-                        $safeArgs = empty($args) ? new \stdClass() : json_decode(json_encode($args), false);
-                        $safeResponse = json_decode(json_encode(['result' => $hasilDatabase]), false);
+                        $safeArgs = json_decode(json_encode($args, JSON_FORCE_OBJECT), false);
+                        $safeResponse = json_decode(json_encode(['result' => $hasilDatabase], JSON_FORCE_OBJECT), false);
 
                         $geminiContents[] = ['role' => 'model', 'parts' => [['functionCall' => ['name' => $functionName, 'args' => $safeArgs]]]];
                         $geminiContents[] = ['role' => 'function', 'parts' => [['functionResponse' => ['name' => $functionName, 'response' => $safeResponse]]]];
 
-                        $secondPayload = [
-                            'system_instruction' => ['parts' => [['text' => $systemInstruction]]],
-                            'tools' => $tools,
-                            'contents' => $geminiContents,
-                            'generationConfig' => ['temperature' => 0.4],
-                        ];
-
+                        $secondPayload = ['system_instruction' => ['parts' => [['text' => $systemInstruction]]], 'tools' => $tools, 'contents' => $geminiContents, 'generationConfig' => ['temperature' => 0.4]];
                         $secondResponse = Http::timeout(20)->post($url, $secondPayload);
+                        
                         if ($secondResponse->successful()) {
-                            return $secondResponse->json('candidates.0.content.parts.0.text') ?? "Maaf kak, saya gagal menerjemahkan data pesanannya.";
+                            return $secondResponse->json('candidates.0.content.parts.0.text') ?? "Maaf kak, saya gagal menerjemahkan pesanan.";
                         }
                     }
                 }
-
                 return $parts['text'] ?? "Maaf kak, saya sedang gagal memproses jawaban biasa.";
             }
-
-            Log::error('Gemini API Error Asli: ' . $response->body());
-
-            return "Maaf kak, sistem sedang sibuk. Mohon tunggu admin kami membalas ya.";
+            Log::error('Gemini API Error: ' . $response->body());
+            return "Maaf kak, sistem AI sedang sibuk. Mohon tunggu admin kami membalas ya.";
 
         } catch (\Exception $e) {
             Log::error('Gemini Exception: ' . $e->getMessage());
