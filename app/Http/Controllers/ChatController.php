@@ -3369,7 +3369,7 @@
 // use App\Models\User;
 // use App\Models\Message;
 // use App\Models\Product;
-// use App\Models\Transaction; 
+// use App\Models\Transaction;
 // use App\Events\MessageSent;
 // use Illuminate\Http\Request;
 // use Illuminate\Support\Facades\Log;
@@ -3380,7 +3380,7 @@
 // {
 //     // 1. [PERBAIKAN] Mengambil daftar staf (Unified Inbox Gycora Care)
 //     public function getStaffList() {
-        
+
 //         $aiUser = User::firstOrCreate(
 //             ['email' => 'ai@gycora.com'],
 //             ['first_name' => 'Gycora', 'last_name' => 'AI Assistant', 'password' => bcrypt('password_rahasia_ai_123'), 'usertype' => 'admin', 'phone' => '00000000000']
@@ -3388,7 +3388,7 @@
 
 //         // Ambil salah satu admin utama sebagai "wajah" dari Gycora Care
 //         $mainAdmin = User::where('email', '!=', 'ai@gycora.com')->where('usertype', 'admin')->first();
-        
+
 //         if($mainAdmin) {
 //             // Override virtual (tidak mengubah database) agar di frontend tampil elegan
 //             $mainAdmin->first_name = "Gycora";
@@ -3428,7 +3428,7 @@
 //     }
 
 //     // 3. [PERBAIKAN] Menyimpan pesan & Logika Handoff AI Cerdas
-//     public function sendMessage(Request $request) {        
+//     public function sendMessage(Request $request) {
 //         $request->validate(['receiver_id' => 'required|exists:users,id', 'message' => 'required|string']);
 
 //         $myId = auth()->id();
@@ -3446,7 +3446,7 @@
 
 //         // LOGIKA HYBRID: Memicu AI HANYA jika Pelanggan mengirim pesan ke Admin
 //         if ($me->usertype === 'user' && $receiver->usertype === 'admin') {
-            
+
 //             // Cek mode chat (Default: ai)
 //             $chatMode = Cache::get('chat_mode_' . $myId, 'ai');
 
@@ -3466,13 +3466,13 @@
 //                     return response()->json([
 //                         'status' => 'success',
 //                         'user_message' => $userMessage->load('sender'),
-//                         'ai_message' => $aiMessage->load('sender') 
+//                         'ai_message' => $aiMessage->load('sender')
 //                     ]);
 //                 }
-//             } 
+//             }
 //             // Jika mode = 'human', AI diam (Handoff berhasil)
-//         } 
-        
+//         }
+
 //         return response()->json(['status' => 'success', 'user_message' => $userMessage->load('sender')]);
 //     }
 
@@ -3578,7 +3578,7 @@
 
 //                         $secondPayload = ['system_instruction' => ['parts' => [['text' => $systemInstruction]]], 'tools' => $tools, 'contents' => $geminiContents, 'generationConfig' => ['temperature' => 0.4]];
 //                         $secondResponse = Http::timeout(20)->post($url, $secondPayload);
-                        
+
 //                         if ($secondResponse->successful()) {
 //                             return $secondResponse->json('candidates.0.content.parts.0.text') ?? "Maaf kak, saya gagal menerjemahkan pesanan.";
 //                         }
@@ -3601,7 +3601,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Message;
 use App\Models\Product;
-use App\Models\Transaction; 
+use App\Models\Transaction;
 use App\Events\MessageSent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -3611,21 +3611,41 @@ use Illuminate\Support\Facades\Cache;
 class ChatController extends Controller
 {
     // 1. Mengambil daftar staf (Unified Inbox Gycora Care)
-    public function getStaffList() {
-        $aiUser = User::firstOrCreate(
-            ['email' => 'ai@gycora.com'],
-            ['first_name' => 'Gycora', 'last_name' => 'AI Assistant', 'password' => bcrypt('password_rahasia_ai_123'), 'usertype' => 'admin', 'phone' => '00000000000']
-        );
+    // public function getStaffList() {
+    //     $aiUser = User::firstOrCreate(
+    //         ['email' => 'ai@gycora.com'],
+    //         ['first_name' => 'Gycora', 'last_name' => 'AI Assistant', 'password' => bcrypt('password_rahasia_ai_123'), 'usertype' => 'admin', 'phone' => '00000000000']
+    //     );
 
+    //     $mainAdmin = User::where('email', '!=', 'ai@gycora.com')->whereIn('usertype', ['admin', 'superadmin', 'cs'])->first();
+
+    //     if($mainAdmin) {
+    //         $mainAdmin->first_name = "Gycora";
+    //         $mainAdmin->last_name = "Care";
+    //         $mainAdmin->usertype = "Official Account";
+    //         return response()->json([$mainAdmin]);
+    //     }
+
+    //     return response()->json([$aiUser]);
+    // }
+
+    public function getStaffList() {
+        $myId = auth()->id();
+        $aiUser = User::firstOrCreate(['email' => 'ai@gycora.com'], ['first_name' => 'Gycora', 'last_name' => 'AI Assistant', 'password' => bcrypt('password_rahasia_ai_123'), 'usertype' => 'admin', 'phone' => '00000000000']);
         $mainAdmin = User::where('email', '!=', 'ai@gycora.com')->whereIn('usertype', ['admin', 'superadmin', 'cs'])->first();
-        
+
         if($mainAdmin) {
             $mainAdmin->first_name = "Gycora";
             $mainAdmin->last_name = "Care";
             $mainAdmin->usertype = "Official Account";
+
+            // Hitung pesan belum terbaca
+            $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
+            if (!in_array($aiUser->id, $adminIds)) $adminIds[] = $aiUser->id;
+
+            $mainAdmin->unread_count = Message::whereIn('sender_id', $adminIds)->where('receiver_id', $myId)->where('is_read', false)->count();
             return response()->json([$mainAdmin]);
         }
-
         return response()->json([$aiUser]);
     }
 
@@ -3636,7 +3656,7 @@ class ChatController extends Controller
 
         // Kumpulkan semua ID Admin, CS, dan Superadmin
         $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
-        
+
         // Pastikan AI juga masuk dalam deteksi
         $aiUser = User::where('email', 'ai@gycora.com')->first();
         if ($aiUser && !in_array($aiUser->id, $adminIds)) {
@@ -3666,7 +3686,7 @@ class ChatController extends Controller
     }
 
     // 3. [PERBAIKAN] Menyimpan pesan & Pemicu AI
-    public function sendMessage(Request $request) {        
+    public function sendMessage(Request $request) {
         $request->validate(['receiver_id' => 'required|exists:users,id', 'message' => 'required|string']);
 
         $myId = auth()->id();
@@ -3687,7 +3707,7 @@ class ChatController extends Controller
 
         // Jika Pelanggan mengirim pesan ke Admin/AI
         if ($isCustomer && $isReceiverAdmin) {
-            
+
             $chatMode = Cache::get('chat_mode_' . $myId, 'ai');
 
             if ($chatMode === 'ai') {
@@ -3706,12 +3726,12 @@ class ChatController extends Controller
                     return response()->json([
                         'status' => 'success',
                         'user_message' => $userMessage->load('sender'),
-                        'ai_message' => $aiMessage->load('sender') 
+                        'ai_message' => $aiMessage->load('sender')
                     ]);
                 }
-            } 
-        } 
-        
+            }
+        }
+
         return response()->json(['status' => 'success', 'user_message' => $userMessage->load('sender')]);
     }
 
@@ -3816,7 +3836,7 @@ class ChatController extends Controller
 
                         $secondPayload = ['system_instruction' => ['parts' => [['text' => $systemInstruction]]], 'tools' => $tools, 'contents' => $geminiContents, 'generationConfig' => ['temperature' => 0.4]];
                         $secondResponse = Http::timeout(20)->post($url, $secondPayload);
-                        
+
                         if ($secondResponse->successful()) {
                             return $secondResponse->json('candidates.0.content.parts.0.text') ?? "Maaf kak, saya gagal menerjemahkan pesanan.";
                         }
@@ -3831,5 +3851,23 @@ class ChatController extends Controller
             Log::error('Gemini Exception: ' . $e->getMessage());
             return "Maaf kak, asisten AI sedang offline. Pesan kakak akan dibalas oleh tim kami segera.";
         }
+    }
+
+    public function markAsRead($senderId) {
+        $myId = auth()->id();
+        $me = User::find($myId);
+
+        $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
+        $aiUser = User::where('email', 'ai@gycora.com')->first();
+        if ($aiUser && !in_array($aiUser->id, $adminIds)) $adminIds[] = $aiUser->id;
+
+        if (!in_array($me->usertype, ['admin', 'superadmin', 'cs'])) {
+            // Pelanggan membaca pesan Solher Care
+            Message::whereIn('sender_id', $adminIds)->where('receiver_id', $myId)->where('is_read', false)->update(['is_read' => true]);
+        } else {
+            // Admin membaca pesan Pelanggan
+            Message::where('sender_id', $senderId)->whereIn('receiver_id', $adminIds)->where('is_read', false)->update(['is_read' => true]);
+        }
+        return response()->json(['status' => 'success']);
     }
 }

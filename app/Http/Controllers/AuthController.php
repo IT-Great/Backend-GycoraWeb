@@ -154,18 +154,32 @@ class AuthController extends Controller
     // =========================================================================
     // 4. AMBIL SEMUA USER (Khusus Pelanggan)
     // =========================================================================
-    public function getAllUsers()
-    {
-        // Mengambil user yang bukan admin/staf
+    // public function getAllUsers()
+    // {
+    //     // Mengambil user yang bukan admin/staf
+    //     $users = User::whereIn('usertype', ['user', 'reseller'])
+    //         ->orderBy('id', 'desc')
+    //         ->get(['id', 'first_name', 'last_name', 'email', 'usertype', 'is_subscribed', 'created_at']);
+
+    //     // Jika Anda ingin memastikan format tanggal sama persis seperti respons Golang,
+    //     // Anda bisa melakukan map pada collection, tapi default JSON Eloquent biasanya sudah cukup baik.
+    //     // Format default created_at Eloquent: "2024-05-12T10:00:00.000000Z"
+
+    //     return response()->json($users);
+    // }
+
+    public function getAllUsers() {
+        $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
+        $aiUser = User::where('email', 'ai@gycora.com')->first();
+        if ($aiUser && !in_array($aiUser->id, $adminIds)) $adminIds[] = $aiUser->id;
+
         $users = User::whereIn('usertype', ['user', 'reseller'])
-            ->orderBy('id', 'desc')
-            ->get(['id', 'first_name', 'last_name', 'email', 'usertype', 'is_subscribed', 'created_at']);
+            ->withCount(['messages as unread_count' => function ($query) use ($adminIds) {
+                $query->where('is_read', false)->whereIn('receiver_id', $adminIds);
+            }])
+            ->latest()->get();
 
-        // Jika Anda ingin memastikan format tanggal sama persis seperti respons Golang,
-        // Anda bisa melakukan map pada collection, tapi default JSON Eloquent biasanya sudah cukup baik.
-        // Format default created_at Eloquent: "2024-05-12T10:00:00.000000Z"
-
-        return response()->json($users);
+        return response()->json(['data' => $users], 200);
     }
 
     // =========================================================================
