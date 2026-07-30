@@ -64,4 +64,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Cart::class);
     }
+
+    public function messages()
+    {
+        return $this->hasMany(\App\Models\Message::class, 'sender_id');
+    }
 }
