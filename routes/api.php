@@ -492,6 +492,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/staff-list', [ChatController::class, 'getStaffList']);
     Route::get('/messages/{userId}', [ChatController::class, 'getMessages']);
     Route::post('/messages', [ChatController::class, 'sendMessage']);
+    Route::post('/chat/read/{senderId}', [ChatController::class, 'markAsRead']);
 
     // Audit
     Route::get('/admin/audit-logs', [AuditLogController::class, 'index']);
