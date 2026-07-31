@@ -156,7 +156,7 @@ class ReviewController extends Controller
             $prompt .= $contextData;
 
             $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
 
             $response = Http::timeout(30)->post($url, [
                 'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
