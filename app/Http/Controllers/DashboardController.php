@@ -695,6 +695,7 @@ use App\Services\C45Service;
 use App\Models\TransactionDetail;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Http;
 
 class DashboardController extends Controller
 {
@@ -1021,5 +1022,90 @@ class DashboardController extends Controller
                 ];
             })
             ->toArray();
+    }
+
+    // =========================================================================
+    // 👇 [BARU] FUNGSI AI BUSINESS ANALYST & TREND FORECASTER 👇
+    // =========================================================================
+    public function getAiInsights()
+    {
+        try {
+            // 1. Tarik Data Penjualan 7 Hari Terakhir vs 7 Hari Sebelumnya
+            $last7Days = Carbon::now()->subDays(7);
+
+            $salesLast7Days = Transaction::where('status', 'completed')
+                ->where('created_at', '>=', $last7Days)
+                ->sum('total_amount');
+
+            $previous7Days = Carbon::now()->subDays(14);
+            $salesPrevious7Days = Transaction::where('status', 'completed')
+                ->where('created_at', '>=', $previous7Days)
+                ->where('created_at', '<', $last7Days)
+                ->sum('total_amount');
+
+            // 2. Tarik Data Stok Menipis (< 10)
+            $lowStockProducts = Product::where('status', 'active')
+                ->where('stock', '<=', 10)
+                ->select('name', 'stock')
+                ->get();
+
+            // 3. Tarik Top 5 Produk Terlaris 7 Hari Terakhir
+            $topSellingProducts = TransactionDetail::select('products.name', DB::raw('SUM(transaction_details.quantity) as total_sold'))
+                ->join('products', 'products.id', '=', 'transaction_details.product_id')
+                ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
+                ->where('transactions.status', 'completed')
+                ->where('transactions.created_at', '>=', $last7Days)
+                ->groupBy('products.name')
+                ->orderBy('total_sold', 'DESC')
+                ->limit(5)
+                ->get();
+
+            // 4. Racik Konteks untuk Prompt Gemini AI
+            $dataContext = "Data Penjualan 7 Hari Terakhir: Rp " . number_format($salesLast7Days, 0, ',', '.') . "\n";
+            $dataContext .= "Data Penjualan 7 Hari Sebelumnya: Rp " . number_format($salesPrevious7Days, 0, ',', '.') . "\n";
+
+            $dataContext .= "\nProduk Stok Menipis (<= 10):\n";
+            foreach ($lowStockProducts as $p) {
+                $dataContext .= "- {$p->name} (Sisa Stok: {$p->stock})\n";
+            }
+
+            $dataContext .= "\nTop 5 Produk Terlaris (7 Hari Terakhir):\n";
+            foreach ($topSellingProducts as $p) {
+                $dataContext .= "- {$p->name} (Terjual: {$p->total_sold})\n";
+            }
+
+            // 5. System Instructions untuk Memaksa Format HTML dari AI
+            $systemInstruction = "Kamu adalah AI Business Analyst & Trend Forecaster untuk Gycora. Berdasarkan data real-time yang diberikan, berikan 2 analisis strategis:\n1. Smart Restock Alert: Peringatan restock berdasarkan stok menipis dan kaitan dengan produk terlaris.\n2. Sales Summary: Evaluasi performa penjualan 7 hari terakhir vs sebelumnya.\n\nATURAN MUTLAK:\n- Buat laporan dalam format tag HTML rapi (seperti <strong>, <ul>, <li>, <br>). JANGAN menggunakan format Markdown (* atau **).\n- Jangan sertakan tag <html> atau <body>.\n- Gunakan bahasa Indonesia yang profesional, memotivasi, dan langsung pada kesimpulan.";
+
+            $apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . $apiKey;
+
+            $payload = [
+                'system_instruction' => ['parts' => [['text' => $systemInstruction]]],
+                'contents' => [
+                    ['role' => 'user', 'parts' => [['text' => "Tolong analisis data berikut:\n" . $dataContext]]]
+                ],
+                'generationConfig' => ['temperature' => 0.4]
+            ];
+
+            // Tembak API Gemini
+            $response = Http::timeout(30)->post($url, $payload);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+
+                // Hilangkan backticks markdown jika Gemini membandel
+                $text = preg_replace('/```html\n?/', '', $text);$text = preg_replace('/```/', '', $text);
+
+                return response()->json(['status' => 'success', 'data' => trim($text)]);
+            }
+
+            return response()->json(['status' => 'error', 'message' => 'Gagal memproses API AI.'], 500);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('AI Insights Error: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
     }
 }

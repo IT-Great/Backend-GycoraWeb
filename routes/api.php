@@ -514,6 +514,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('/predicted-bestsellers', [DashboardController::class, 'getPredictedBestsellers']);
     Route::get('/recent-activities', [DashboardController::class, 'getRecentActivities']);
     Route::get('/daily-average', [DashboardController::class, 'getAverageDailyRevenue']);
+    Route::get('/ai-insights', [DashboardController::class, 'getAiInsights']);
 });
 
 // Di dalam Grup Middleware Khusus Admin Gycora
