@@ -488,6 +488,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/reviews', [ReviewController::class, 'indexAdmin']);
     Route::delete('/admin/reviews/{id}', [ReviewController::class, 'destroyAdmin']);
 
+    // 👇 Tambahkan dua baris ini untuk fitur AI Reviews 👇
+    Route::get('/admin/reviews-summary', [ReviewController::class, 'generateSummary']);
+    Route::post('/admin/reviews/{id}/ai-reply', [ReviewController::class, 'generateAutoReply']);
+
     // Chat
     Route::get('/staff-list', [ChatController::class, 'getStaffList']);
     Route::get('/messages/{userId}', [ChatController::class, 'getMessages']);
