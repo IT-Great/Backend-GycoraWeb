@@ -1799,6 +1799,10 @@ class TransactionController extends Controller
                 ->delete();
             // 👆 ============================================== 👆
 
+            // 👇 [BARU] PANGGIL FUNGSI KIRIM EVENT CAPI FACEBOOK 👇
+            // Kita panggil fungsi helper yang akan dibuat di bawah
+            $this->sendMetaConversionApiEvent($transaction, $user, $cartItems, $totalAmount, $itemTotals);
+
             return [
                 'transaction' => $transaction,
                 'totalAmount' => $totalAmount,
@@ -2539,6 +2543,74 @@ class TransactionController extends Controller
         // Jika total belanja >= 100.000, jadikan member
         if ($totalSpent >= 100000) {
             $user->update(['is_membership' => true]);
+        }
+    }
+
+    // =========================================================================
+    // 👇 [BARU] FUNGSI HELPER UNTUK META CONVERSION API (CAPI) 👇
+    // =========================================================================
+    private function sendMetaConversionApiEvent($transaction, $user, $cartItems, $totalAmount, $itemTotals)
+    {
+        try {
+            $pixelId = env('META_PIXEL_ID');
+            $accessToken = env('META_CAPI_ACCESS_TOKEN');
+
+            // Jika token/pixel ID tidak ada, jangan paksakan (misal di local)
+            if (!$pixelId || !$accessToken) {
+                return;
+            }
+
+            // 1. Susun Data Pengguna (Harus di-hash SHA256 sesuai aturan Facebook)
+            $hashedEmail = hash('sha256', strtolower(trim($user->email)));
+            $hashedPhone = $user->phone ? hash('sha256', preg_replace('/[^0-9]/', '', $user->phone)) : null;
+
+            $userData = ['em' => $hashedEmail];
+            if ($hashedPhone) {
+                $userData['ph'] = $hashedPhone;
+            }
+
+            // 2. Susun Data Konten (Produk)
+            $contents = [];
+            foreach ($cartItems as $item) {
+                $product = $item->product;
+                if ($product) {
+                    $itemTotal = $itemTotals[$item->id] ?? ($product->price * $item->quantity);
+                    $unitPrice = $item->quantity > 0 ? ($itemTotal / $item->quantity) : 0;
+
+                    $contents[] = [
+                        'id' => (string) $product->id,
+                        'quantity' => $item->quantity,
+                        'item_price' => $unitPrice,
+                    ];
+                }
+            }
+
+            // 3. Susun Payload untuk Graph API Facebook
+            $payload = [
+                'data' => [
+                    [
+                        'event_name' => 'Purchase', // Nama event wajib untuk CAPI
+                        'event_time' => time(),
+                        'action_source' => 'website',
+                        'user_data' => $userData,
+                        'custom_data' => [
+                            'currency' => 'IDR', // Asumsikan base currency
+                            'value' => (float) $totalAmount,
+                            'contents' => $contents,
+                            'content_type' => 'product',
+                            'order_id' => $transaction->order_id,
+                        ],
+                    ]
+                ]
+            ];
+
+            // 4. Kirim Request ke Server Meta (Background Process)
+            // Timeout disetel kecil agar tidak menahan proses checkout jika Meta sedang lambat
+            Http::timeout(5)->post("https://graph.facebook.com/v19.0/{$pixelId}/events?access_token={$accessToken}", $payload);
+
+        } catch (\Exception $e) {
+            // Kita log error-nya, tapi JANGAN gagalkan transaksi pelanggan!
+            \Illuminate\Support\Facades\Log::warning('Meta CAPI Error: ' . $e->getMessage());
         }
     }
 }
