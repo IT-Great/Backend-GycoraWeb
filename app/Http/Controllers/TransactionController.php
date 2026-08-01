@@ -1704,9 +1704,15 @@ class TransactionController extends Controller
             $totalAmount = array_sum($itemTotals);
 
             // Hitung Ongkir Dasar
+            // $totalQuantity = $cartItems->sum('quantity') ?: 1;
+            // $baseShippingRate = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
+            // $totalShippingCost = $baseShippingRate * $totalQuantity;
+
+            // Hitung Ongkir Dasar
             $totalQuantity = $cartItems->sum('quantity') ?: 1;
-            $baseShippingRate = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
-            $totalShippingCost = $baseShippingRate * $totalQuantity;
+            
+            // 👇 Hapus perkalian dengan $totalQuantity agar ongkir tetap flat (sesuai API)
+            $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
 
             // =========================================================================
             // 3. POTONG DISKON (10% + 10K)
