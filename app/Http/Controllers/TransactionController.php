@@ -1710,7 +1710,7 @@ class TransactionController extends Controller
 
             // Hitung Ongkir Dasar
             $totalQuantity = $cartItems->sum('quantity') ?: 1;
-            
+
             // 👇 Hapus perkalian dengan $totalQuantity agar ongkir tetap flat (sesuai API)
             $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
 
