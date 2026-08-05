@@ -928,6 +928,7 @@ use App\Models\ProductStock;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -938,8 +939,11 @@ class ProductController extends Controller
     public function index()
     {
         try {
-            // HANYA AMBIL YANG ACTIVE
-            $products = Product::with('category')->where('status', 'active')->latest()->get();
+            // 👇 Simpan query ke cache Redis selama 1 jam (3600 detik).
+            // Jika ada cache bernama 'products_active', langsung gunakan itu.
+            $products = Cache::remember('products_active', 3600, function () {
+                return Product::with('category')->where('status', 'active')->latest()->get();
+            });
 
             return response()->json($products, 200);
         } catch (\Exception $e) {
@@ -1248,7 +1252,7 @@ class ProductController extends Controller
             // 👇 Validasi Bundle 👇
             'is_bundle_active' => 'boolean',
             'bundle_price' => 'nullable|numeric|min:0',
-            'bundle_start_date' => 'nullable|date', 
+            'bundle_start_date' => 'nullable|date',
             'bundle_end_date' => 'nullable|date',
 
             // Validasi Multi Currency
