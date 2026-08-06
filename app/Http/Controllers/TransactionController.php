@@ -1492,6 +1492,7 @@ use Xendit\Refund\CreateRefund;
 use Xendit\Refund\RefundApi;
 use Xendit\XenditSdkException;
 use App\Services\BiteshipService;
+use App\Jobs\SendShippingUpdateJob;
 
 class TransactionController extends Controller
 {
@@ -2528,6 +2529,10 @@ class TransactionController extends Controller
 
             // Eksekusi semua update ke database dalam 1 query
             $transaction->update($updates);
+
+            // 👇 [BARU] TRIGGER PENGIRIMAN EMAIL NOTIFIKASI SECARA BACKGROUND 👇
+            SendShippingUpdateJob::dispatch($transaction->id, $status);
+            // 👆 ========================================================== 👆
 
             return response()->json(['message' => 'Webhook processed successfully']);
         });
