@@ -75,9 +75,11 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Laravel\Scout\Searchable; // 👈 1. Import Searchable Trait
 
 class Product extends Model
 {
+    use Searchable; // 👈 2. Gunakan Trait ini
     use HasFactory;
     use Auditable;
 
@@ -162,5 +164,20 @@ class Product extends Model
         // Asumsi file disimpan di storage/app/public/uploads
         $pathOnly = str_starts_with($value, '/') ? $value : '/' . $value;
         return asset('storage' . $pathOnly);
+    }
+
+    /**
+     * 3. Tentukan data apa saja yang akan dikirim (di-index) ke Meilisearch.
+     * Kita hanya mengirim teks yang relevan untuk memperingan beban memory.
+     */
+    public function toSearchableArray()
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'sku' => $this->sku,
+            'category_name' => $this->category ? $this->category->name : '',
+            // Jangan masukkan 'description' jika terlalu panjang dan tidak relevan untuk pencarian cepat
+        ];
     }
 }

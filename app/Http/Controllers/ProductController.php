@@ -1839,4 +1839,35 @@ class ProductController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
+    // =====================================================================
+    // 👇 FITUR PENCARIAN SUPER CEPAT (MEILISEARCH FULL-TEXT SEARCH) 👇
+    // =====================================================================
+    public function search(Request $request)
+    {
+        try {
+            $query = $request->query('q', '');
+
+            // Jika query kosong, kembalikan response kosong agar Frontend tidak crash
+            if (empty(trim($query))) {
+                return response()->json(['status' => 'success', 'data' => []], 200);
+            }
+
+            // Eksekusi pencarian ke Meilisearch melalui Laravel Scout
+            // Kami membatasi hasil maksimal 15 agar response tetap ringan
+            $products = Product::search($query)
+                ->where('status', 'active')
+                ->take(15)
+                ->get();
+
+            // Meilisearch tidak secara otomatis membawa relasi category
+            // Jadi kita load category-nya secara lazy (Eager Loading N+1 Prevention)
+            $products->load('category');
+
+            return response()->json(['status' => 'success', 'data' => $products], 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
 }

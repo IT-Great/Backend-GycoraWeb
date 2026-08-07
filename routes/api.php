@@ -403,6 +403,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/products/{id}/force', [ProductController::class, 'forceDelete']);
     Route::get('/products/alerts/low-stock', [ProductController::class, 'getLowStockProducts']);
     Route::post('/products/presigned-url', [ProductController::class, 'getPresignedUrl']);
+    Route::get('/search/products', [ProductController::class, 'search']);
 
     Route::get('/admin/product-stocks', [ProductStockController::class, 'index']);
     Route::post('/admin/product-stocks/{productId}', [ProductStockController::class, 'store']);
