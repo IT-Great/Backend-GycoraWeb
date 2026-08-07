@@ -2624,7 +2624,6 @@ class TransactionController extends Controller
             \Illuminate\Support\Facades\Log::warning('Meta CAPI Error: ' . $e->getMessage());
         }
     }
-
     // =====================================================================
     // 👇 FUNGSI BARU UNTUK ADMIN MENGHAPUS TRANSAKSI PERMANEN 👇
     // =====================================================================
@@ -2660,7 +2659,8 @@ class TransactionController extends Controller
 
             // 4. HAPUS DETAIL TRANSAKSI & BERSIHKAN CACHE
             foreach ($transaction->details as $detail) {
-                Cache::tags(['catalog'])->forget("products.detail.{$detail->product_id}");
+                // 👇 [PERBAIKAN] Gunakan forget standar tanpa tags() 👇
+                Cache::forget("products.detail.{$detail->product_id}");
                 $detail->delete();
             }
 
