@@ -177,6 +177,7 @@ class Product extends Model
             'name' => $this->name,
             'sku' => $this->sku,
             'category_name' => $this->category ? $this->category->name : '',
+            'status' => $this->status
             // Jangan masukkan 'description' jika terlalu panjang dan tidak relevan untuk pencarian cepat
         ];
     }
