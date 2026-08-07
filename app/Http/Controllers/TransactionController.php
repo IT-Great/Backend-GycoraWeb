@@ -2624,4 +2624,53 @@ class TransactionController extends Controller
             \Illuminate\Support\Facades\Log::warning('Meta CAPI Error: ' . $e->getMessage());
         }
     }
+
+    // =====================================================================
+    // 👇 FUNGSI BARU UNTUK ADMIN MENGHAPUS TRANSAKSI PERMANEN 👇
+    // =====================================================================
+    public function forceDeleteTransaction(Request $request, $id)
+    {
+        $transaction = Transaction::with(['details', 'payment'])->find($id);
+
+        if (!$transaction) {
+            return response()->json(['message' => 'Transaksi tidak ditemukan.'], 404);
+        }
+
+        // Mulai transaksi database agar penghapusan dan pengembalian stok konsisten
+        DB::transaction(function () use ($transaction) {
+
+            // 1. KEMBALIKAN STOK BARANG (Jika statusnya belum pernah dikembalikan)
+            $statusesThatAlreadyRestoredStock = ['refund_manual_required', 'cancelled', 'shipping_failed', 'returned', 'refunded'];
+
+            if (!in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
+                foreach ($transaction->details as $detail) {
+                    $this->restoreProductStock($detail->product_id, $detail->quantity);
+                }
+            }
+
+            // 2. KEMBALIKAN POIN (Opsional: Jika ingin poin uji coba kembali)
+            if ($transaction->points_used > 0 && !in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
+                $transaction->user->increment('point', $transaction->points_used);
+            }
+
+            // 3. HAPUS DATA PEMBAYARAN TERKAIT
+            if ($transaction->payment) {
+                $transaction->payment->delete();
+            }
+
+            // 4. HAPUS DETAIL TRANSAKSI & BERSIHKAN CACHE
+            foreach ($transaction->details as $detail) {
+                Cache::tags(['catalog'])->forget("products.detail.{$detail->product_id}");
+                $detail->delete();
+            }
+
+            // 5. HAPUS TRANSAKSI UTAMA
+            $transaction->delete();
+        });
+
+        // Bersihkan cache secara menyeluruh
+        Cache::flush();
+
+        return response()->json(['message' => 'Transaksi berhasil dihapus secara permanen beserta stok yang dikembalikan.']);
+    }
 }

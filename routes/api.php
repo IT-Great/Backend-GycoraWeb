@@ -436,6 +436,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/admin/transactions/{id}/retry-shipping', [TransactionController::class, 'retryShipping']);
 
+    Route::delete('/admin/transactions/{id}', [TransactionController::class, 'forceDeleteTransaction']);
+
     Route::get('/admin/sales-report', [TransactionController::class, 'salesReport']);
 
     // Approval Refund
