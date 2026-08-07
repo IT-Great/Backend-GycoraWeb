@@ -1761,6 +1761,67 @@ class ProductController extends Controller
         }
     }
 
+    // =====================================================================
+    // 👇 ALGORITMA COLLABORATIVE FILTERING (FREQUENTLY BOUGHT TOGETHER) 👇
+    // =====================================================================
+    public function getRecommendations($id)
+    {
+        try {
+            // 1. Cari SEMUA ID Transaksi yang pernah memuat produk ini
+            $transactionIds = DB::table('transaction_details')
+                ->where('product_id', $id)
+                ->pluck('transaction_id');
+
+            // 2. Collaborative Filtering: Dari transaksi-transaksi di atas,
+            // produk apa lagi yang paling banyak dibeli bersamaan?
+            $recommendedProductIds = DB::table('transaction_details')
+                ->whereIn('transaction_id', $transactionIds)
+                ->where('product_id', '!=', $id) // Kecualikan produk itu sendiri
+                ->select('product_id', DB::raw('count(*) as total_bought_together'))
+                ->groupBy('product_id')
+                ->orderByDesc('total_bought_together')
+                ->take(4) // Ambil 4 produk teratas
+                ->pluck('product_id');
+
+            // 3. Tarik data lengkap produk rekomendasinya
+            $recommendations = collect();
+            if ($recommendedProductIds->isNotEmpty()) {
+                // Gunakan FIELD agar urutan sesuai frekuensi pembelian terbanyak (bukan acak)
+                $orderString = implode(',', $recommendedProductIds->toArray());
+                $recommendations = Product::whereIn('id', $recommendedProductIds)
+                    ->where('status', 'active')
+                    ->orderByRaw("FIELD(id, $orderString)")
+                    ->get();
+            }
+
+            // 4. FALLBACK LOGIC:
+            // Jika produk ini masih sangat baru dan belum ada riwayat pembelian bersilangan (kurang dari 4),
+            // isi kekosongannya dengan produk dari Kategori yang sama secara acak.
+            if ($recommendations->count() < 4) {
+                $product = Product::find($id);
+                if ($product) {
+                    $fallbackProducts = Product::where('category_id', $product->category_id)
+                        ->where('id', '!=', $id)
+                        ->whereNotIn('id', $recommendedProductIds) // Jangan duplikat
+                        ->where('status', 'active')
+                        ->inRandomOrder()
+                        ->take(4 - $recommendations->count())
+                        ->get();
+
+                    $recommendations = $recommendations->merge($fallbackProducts);
+                }
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $recommendations
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
     // FUNGSI BARU: MENGAMBIL PRODUK DENGAN STOK KRITIS (<= 5)
     public function getLowStockProducts()
     {
