@@ -166,6 +166,12 @@ class Product extends Model
         return asset('storage' . $pathOnly);
     }
 
+    // 👇 [BARU] GATEKEEPER: Hanya produk 'active' yang boleh masuk ke Meilisearch
+    public function shouldBeSearchable()
+    {
+        return $this->status === 'active';
+    }
+
     /**
      * 3. Tentukan data apa saja yang akan dikirim (di-index) ke Meilisearch.
      * Kita hanya mengirim teks yang relevan untuk memperingan beban memory.
@@ -177,8 +183,6 @@ class Product extends Model
             'name' => $this->name,
             'sku' => $this->sku,
             'category_name' => $this->category ? $this->category->name : '',
-            'status' => $this->status
-            // Jangan masukkan 'description' jika terlalu panjang dan tidak relevan untuk pencarian cepat
         ];
     }
 }
