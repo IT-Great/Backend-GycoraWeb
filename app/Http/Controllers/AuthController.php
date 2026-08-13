@@ -750,4 +750,24 @@ class AuthController extends Controller
         }
         return false;
     }
+
+    // ====================================================================
+    // FUNGSI BARU: SILENT TOKEN REFRESH
+    // ====================================================================
+    public function refreshToken(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Cabut/Hapus token yang saat ini sedang dipakai (kedaluwarsa/hampir kedaluwarsa)
+        $user->currentAccessToken()->delete();
+
+        // 2. Terbitkan token baru
+        $newToken = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Token berhasil diperbarui secara silent',
+            'access_token' => $newToken,
+            'user' => $user
+        ], 200);
+    }
 }

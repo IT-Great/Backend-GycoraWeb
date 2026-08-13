@@ -847,7 +847,7 @@ class DashboardController extends Controller
             if (!$imagePath) return '';
             if (str_starts_with($imagePath, 'http')) return $imagePath;
 
-            $appUrl = config('app.url') ? config('app.url') : 'https://back.solher.co.id';
+            $appUrl = config('app.url') ? config('app.url') : 'https://back.gycoraessence.com';
             $baseUrlFixed = str_replace('/api', '', $appUrl);
 
             return $baseUrlFixed . '/storage/' . $imagePath;
@@ -965,7 +965,7 @@ class DashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(function ($item) {
-                $appUrl = config('app.url') ? config('app.url') : 'https://back.solher.co.id';
+                $appUrl = config('app.url') ? config('app.url') : 'https://back.gycoraessence.com';
                 $baseUrlFixed = str_replace('/api', '', $appUrl);
                 $imgUrl = $item->image && !str_starts_with($item->image, 'http') ? $baseUrlFixed . '/storage/' . $item->image : $item->image;
 

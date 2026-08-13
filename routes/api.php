@@ -376,6 +376,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/presigned-url', [AuthController::class, 'getProfilePresignedUrl']);
     Route::post('/admin/update-image', [AuthController::class, 'updateAdminImage']);
     Route::post('/admin/update-password', [AuthController::class, 'updateAdminPassword']);
+    Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
 
     Route::get('/admin/messages', [ContactController::class, 'getInboundMessages']);
     Route::get('/admin/messages/{id}', [ContactController::class, 'showAdminMessage']);
