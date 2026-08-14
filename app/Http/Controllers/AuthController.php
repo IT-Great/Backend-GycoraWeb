@@ -407,6 +407,69 @@ class AuthController extends Controller
     //     }
     // }
 
+    // public function updateImage(Request $request)
+    // {
+    //     Log::info('Update profile image started', [
+    //         'user_id' => $request->user()->id
+    //     ]);
+
+    //     $request->validate([
+    //         'image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
+    //     ]);
+
+    //     $user = $request->user();
+
+    //     try {
+    //         // [PERBAIKAN] Jika ada foto lama, hapus dari Local Storage
+    //         if ($user->profile_image) {
+    //             // Bersihkan URL agar hanya menyisakan path relatifnya saja
+    //             $oldPath = str_replace(url(Storage::url('')), '', $user->profile_image);
+    //             $oldPath = ltrim(str_replace('/storage/', '', $oldPath), '/');
+
+    //             Log::info('Deleting old profile image', [
+    //                 'user_id' => $user->id,
+    //                 'old_path' => $oldPath
+    //             ]);
+
+    //             Storage::disk('public')->delete($oldPath);
+    //         }
+
+    //         // [PERBAIKAN] Upload foto baru ke Local Storage (disk 'public' -> storage/app/public/profiles)
+    //         $path = $request->file('image')->store('profiles', 'public');
+
+    //         Log::info('New profile image uploaded', [
+    //             'user_id' => $user->id,
+    //             'new_path' => $path
+    //         ]);
+
+    //         // [PERBAIKAN] Karena kita tidak memakai Accessor di User Model, kita simpan URL penuhnya langsung
+    //         $user->profile_image = url(Storage::url($path));
+    //         $user->save();
+
+    //         $user = $user->fresh();
+
+    //         Log::info('Profile image updated successfully', [
+    //             'user_id' => $user->id,
+    //             'profile_image_url' => $user->profile_image
+    //         ]);
+
+    //         return response()->json([
+    //             'message' => 'Foto profil diperbarui',
+    //             'user' => $user
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         Log::error('Failed to update profile image', [
+    //             'user_id' => $user->id ?? null,
+    //             'error_message' => $e->getMessage(),
+    //             'trace' => $e->getTraceAsString()
+    //         ]);
+
+    //         return response()->json([
+    //             'message' => 'Gagal memperbarui foto profil'
+    //         ], 500);
+    //     }
+    // }
+
     public function updateImage(Request $request)
     {
         Log::info('Update profile image started', [
@@ -420,21 +483,23 @@ class AuthController extends Controller
         $user = $request->user();
 
         try {
-            // [PERBAIKAN] Jika ada foto lama, hapus dari Local Storage
-            if ($user->profile_image) {
-                // Bersihkan URL agar hanya menyisakan path relatifnya saja
-                $oldPath = str_replace(url(Storage::url('')), '', $user->profile_image);
-                $oldPath = ltrim(str_replace('/storage/', '', $oldPath), '/');
+            // [PERBAIKAN] Logika penghapusan foto lama yang lebih tangguh
+            // Memastikan kita hanya mencoba menghapus file lokal (yang memiliki '/storage/' di URL-nya)
+            if ($user->profile_image && str_contains($user->profile_image, '/storage/')) {
 
-                Log::info('Deleting old profile image', [
-                    'user_id' => $user->id,
-                    'old_path' => $oldPath
-                ]);
+                // Ekstrak nama file/path murni dari URL, contoh: "profiles/namafoto.png"
+                $oldPath = explode('/storage/', $user->profile_image)[1] ?? null;
 
-                Storage::disk('public')->delete($oldPath);
+                if ($oldPath) {
+                    Log::info('Deleting old profile image', [
+                        'user_id' => $user->id,
+                        'old_path' => $oldPath
+                    ]);
+                    Storage::disk('public')->delete($oldPath);
+                }
             }
 
-            // [PERBAIKAN] Upload foto baru ke Local Storage (disk 'public' -> storage/app/public/profiles)
+            // Upload foto baru ke Local Storage (disk 'public' -> storage/app/public/profiles)
             $path = $request->file('image')->store('profiles', 'public');
 
             Log::info('New profile image uploaded', [
@@ -442,8 +507,9 @@ class AuthController extends Controller
                 'new_path' => $path
             ]);
 
-            // [PERBAIKAN] Karena kita tidak memakai Accessor di User Model, kita simpan URL penuhnya langsung
-            $user->profile_image = url(Storage::url($path));
+            // [PERBAIKAN UTAMA] Gunakan asset() agar secara mutlak menunjuk ke domain server Anda saat ini
+            // Hasilnya akan menjadi: https://domain-anda.com/storage/profiles/xxx.png
+            $user->profile_image = asset('storage/' . $path);
             $user->save();
 
             $user = $user->fresh();
