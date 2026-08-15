@@ -1846,7 +1846,9 @@ class TransactionController extends Controller
             // =========================================================================
             // 👇 [BARU] LOGIKA EVENT PROMO KEMERDEKAAN 17-18 AGUSTUS 2026 👇
             // =========================================================================
-            $now = Carbon::now('Asia/Jakarta');
+            // $now = Carbon::now('Asia/Jakarta');
+            // GANTI SEMENTARA UNTUK TESTING
+            $now = Carbon::create(2026, 8, 17, 12, 0, 0, 'Asia/Jakarta'); // Jam 12 siang tgl 17
             $promoStart = Carbon::create(2026, 8, 17, 0, 0, 0, 'Asia/Jakarta');
             $promoEnd = Carbon::create(2026, 8, 18, 23, 59, 59, 'Asia/Jakarta');
             $isMerdekaPromoActive = $now->between($promoStart, $promoEnd);
