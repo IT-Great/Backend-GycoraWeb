@@ -350,6 +350,7 @@ Route::get('/search/products', [ProductController::class, 'search']);
 Route::post('/biteship/callback', [TransactionController::class, 'biteshipCallback']);
 Route::post('/payments/callback', [PaymentController::class, 'callback']);
 Route::post('/promo/claim', [PromoController::class, 'claim']);
+Route::get('/promos/active', [PromoController::class, 'getActiveCampaigns']);
 
 Route::get('/landing-page/consult', [ConsultController::class, 'getConsultPageData']);
 Route::get('/products/{slug}/reviews', [ReviewController::class, 'getProductReviews']);

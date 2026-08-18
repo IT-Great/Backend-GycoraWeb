@@ -1465,6 +1465,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendShippingUpdateJob;
 use App\Mail\LowStockAlertMail;
 use App\Mail\RefundResultMail;
 use App\Models\Cart;
@@ -1476,6 +1477,8 @@ use App\Models\PromoCode;
 use App\Models\Transaction;
 use App\Models\TransactionDetail;
 use App\Models\User;
+use App\Services\BiteshipService;
+use App\Services\PromoEngineService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -1486,13 +1489,10 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Xendit\Configuration;
-use Xendit\Invoice\CreateInvoiceRequest;
 use Xendit\Invoice\InvoiceApi;
 use Xendit\Refund\CreateRefund;
 use Xendit\Refund\RefundApi;
 use Xendit\XenditSdkException;
-use App\Services\BiteshipService;
-use App\Jobs\SendShippingUpdateJob;
 
 class TransactionController extends Controller
 {
@@ -1506,10 +1506,14 @@ class TransactionController extends Controller
     // =================================================================================
     public function restoreProductStock($productId, $quantityToRestore)
     {
-        if ($quantityToRestore <= 0) return;
+        if ($quantityToRestore <= 0) {
+            return;
+        }
 
         $product = Product::lockForUpdate()->find($productId);
-        if (! $product) return;
+        if (! $product) {
+            return;
+        }
 
         $remainingToRestore = $quantityToRestore;
 
@@ -1520,7 +1524,9 @@ class TransactionController extends Controller
             ->get();
 
         foreach ($incompleteBatches as $batch) {
-            if ($remainingToRestore <= 0) break;
+            if ($remainingToRestore <= 0) {
+                break;
+            }
             $spaceAvailable = $batch->initial_quantity - $batch->quantity;
             if ($spaceAvailable >= $remainingToRestore) {
                 $batch->increment('quantity', $remainingToRestore);
@@ -1766,6 +1772,7 @@ class TransactionController extends Controller
                 // Jika Grosir aktif, bypass semua urusan Bundle
                 if ($isWholesaleGlobal && $product->wholesale_price > 0) {
                     $itemTotals[$item->id] = $normalPrice * $item->quantity;
+
                     continue;
                 }
 
@@ -1783,8 +1790,12 @@ class TransactionController extends Controller
 
                 $dateStr = $product->bundle_end_date;
                 $isValidDate = true;
-                if (!empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
-                    try { $isValidDate = Carbon::parse($dateStr)->isFuture(); } catch (\Exception $e) { $isValidDate = false; }
+                if (! empty($dateStr) && $dateStr !== '0000-00-00 00:00:00') {
+                    try {
+                        $isValidDate = Carbon::parse($dateStr)->isFuture();
+                    } catch (\Exception $e) {
+                        $isValidDate = false;
+                    }
                 }
 
                 $isDriver = $isEGB && $isBundleValid && $isValidDate && $product->bundle_price > 0;
@@ -1793,12 +1804,12 @@ class TransactionController extends Controller
                     $poolItem = [
                         'cart_id' => $item->id,
                         'normal_price' => $normalPrice,
-                        'bundle_price' => $product->bundle_price ?? 0
+                        'bundle_price' => $product->bundle_price ?? 0,
                     ];
 
                     if ($isDriver) {
                         $driversPool[] = $poolItem;
-                    } elseif (!$isEGB) {
+                    } elseif (! $isEGB) {
                         $partnersPool[] = $poolItem;
                     } else {
                         $itemTotals[$item->id] += $normalPrice;
@@ -1808,7 +1819,7 @@ class TransactionController extends Controller
 
             // --- EKSEKUSI PENJODOHAN BUNDLE DI BACKEND ---
             if (count($driversPool) > 0 && count($partnersPool) > 0) {
-                usort($driversPool, function($a, $b) {
+                usort($driversPool, function ($a, $b) {
                     return $b['bundle_price'] <=> $a['bundle_price'];
                 });
 
@@ -1842,45 +1853,58 @@ class TransactionController extends Controller
             // SET TOTAL AKHIR BENAR-BENAR DARI HASIL KALKULASI BUNDLE
             $totalAmount = array_sum($itemTotals);
 
+            // // =========================================================================
+            // // 👇 [BARU] LOGIKA EVENT PROMO KEMERDEKAAN 17-18 AGUSTUS 2026 👇
+            // // =========================================================================
+            // $now = Carbon::now('Asia/Jakarta');
+            // // GANTI SEMENTARA UNTUK TESTING
+            // // $now = Carbon::create(2026, 8, 17, 12, 0, 0, 'Asia/Jakarta'); // Jam 12 siang tgl 17
+            // $promoStart = Carbon::create(2026, 8, 17, 0, 0, 0, 'Asia/Jakarta');
+            // $promoEnd = Carbon::create(2026, 8, 18, 23, 59, 59, 'Asia/Jakarta');
+            // $isMerdekaPromoActive = $now->between($promoStart, $promoEnd);
+
+            // $merdekaDiscount = 0;
+            // $freebies = [];
+
+            // if ($isMerdekaPromoActive) {
+            //     // Syarat 1: Potongan 17rb untuk minimal belanja 200k
+            //     if ($totalAmount >= 200000) {
+            //         $merdekaDiscount = 17000;
+            //     }
+
+            //     // Syarat 2 & 3: Logika Hadiah (Freebies)
+            //     if ($totalAmount > 500000) {
+            //         $freebies[] = 'Free Gycora Pouch';
+            //         $freebies[] = 'Free Random Haircare';
+            //     } elseif ($hasBundleProduct) {
+            //         $freebies[] = 'Free Gycora Pouch';
+            //     }
+
+            //     // Inject catatan hadiah ke dalam promo_code agar terlihat oleh Admin & Tim Packing
+            //     if ($merdekaDiscount > 0 || !empty($freebies)) {
+            //         $merdekaString = "MERDEKA17";
+            //         if (!empty($freebies)) {
+            //             $merdekaString .= " (" . implode(", ", $freebies) . ")";
+            //         }
+            //         $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode . ' + ' . $merdekaString : $merdekaString;
+            //     }
+            // }
+            // // 👆 ================================================================== 👆
 
             // =========================================================================
-            // 👇 [BARU] LOGIKA EVENT PROMO KEMERDEKAAN 17-18 AGUSTUS 2026 👇
+            // 👇 [BARU] PANGGIL DYNAMIC PROMO ENGINE 👇
             // =========================================================================
-            $now = Carbon::now('Asia/Jakarta');
-            // GANTI SEMENTARA UNTUK TESTING
-            // $now = Carbon::create(2026, 8, 17, 12, 0, 0, 'Asia/Jakarta'); // Jam 12 siang tgl 17
-            $promoStart = Carbon::create(2026, 8, 17, 0, 0, 0, 'Asia/Jakarta');
-            $promoEnd = Carbon::create(2026, 8, 18, 23, 59, 59, 'Asia/Jakarta');
-            $isMerdekaPromoActive = $now->between($promoStart, $promoEnd);
+            $promoEngine = new PromoEngineService;
+            $dynamicPromoResult = $promoEngine->calculate($totalAmount, $hasBundleProduct);
 
-            $merdekaDiscount = 0;
-            $freebies = [];
+            $merdekaDiscount = $dynamicPromoResult['discount_amount']; // Nominal diskon
+            $freebies = $dynamicPromoResult['freebies']; // Array barang gratis
 
-            if ($isMerdekaPromoActive) {
-                // Syarat 1: Potongan 17rb untuk minimal belanja 200k
-                if ($totalAmount >= 200000) {
-                    $merdekaDiscount = 17000;
-                }
-
-                // Syarat 2 & 3: Logika Hadiah (Freebies)
-                if ($totalAmount > 500000) {
-                    $freebies[] = 'Free Gycora Pouch';
-                    $freebies[] = 'Free Random Haircare';
-                } elseif ($hasBundleProduct) {
-                    $freebies[] = 'Free Gycora Pouch';
-                }
-
-                // Inject catatan hadiah ke dalam promo_code agar terlihat oleh Admin & Tim Packing
-                if ($merdekaDiscount > 0 || !empty($freebies)) {
-                    $merdekaString = "MERDEKA17";
-                    if (!empty($freebies)) {
-                        $merdekaString .= " (" . implode(", ", $freebies) . ")";
-                    }
-                    $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode . ' + ' . $merdekaString : $merdekaString;
-                }
+            // Inject tag promo ke catatan database (contoh: "Merdeka Sale 2026 (Free Pouch)")
+            if ($dynamicPromoResult['promo_tag']) {
+                $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode.' + '.$dynamicPromoResult['promo_tag'] : $dynamicPromoResult['promo_tag'];
             }
             // 👆 ================================================================== 👆
-
 
             // Hitung Ongkir Dasar
             $totalQuantity = $cartItems->sum('quantity') ?: 1;
@@ -1970,7 +1994,8 @@ class TransactionController extends Controller
                 if ($product->stock <= 5) {
                     try {
                         Mail::to('gycora.essence@gmail.com')->queue(new LowStockAlertMail($product));
-                    } catch (\Exception $e) {}
+                    } catch (\Exception $e) {
+                    }
                 }
             }
 
@@ -2003,13 +2028,14 @@ class TransactionController extends Controller
             // Lempar ke PaymentController untuk digenerate Invoicenya
             $request->merge([
                 'transaction_id' => $transactionData['transaction']->id,
-                'currency' => 'IDR' // Default, akan dioverride frontend jika multicurrency
+                'currency' => 'IDR', // Default, akan dioverride frontend jika multicurrency
             ]);
 
             return $transactionController->createInvoice($request);
         } catch (\Exception $e) {
             Log::error('Invoice Creation Failed: '.$e->getMessage());
             app(TransactionController::class)->cancelOrder($request, $transactionData['transaction']->id);
+
             return response()->json(['message' => 'Payment gateway error. Please try again.'], 500);
         }
     }
@@ -2018,17 +2044,23 @@ class TransactionController extends Controller
     public function index(Request $request)
     {
         $transactions = Transaction::with(['details.product', 'payment', 'address'])->where('user_id', $request->user()->id)->latest()->get();
+
         return response()->json($transactions);
     }
+
     public function allTransactions()
     {
         $transactions = Transaction::with(['user', 'details.product', 'address'])->latest()->get();
+
         return response()->json($transactions);
     }
+
     public function cancelOrder(Request $request, $id)
     {
         $transaction = Transaction::where('user_id', $request->user()->id)->findOrFail($id);
-        if (! in_array($transaction->status, ['awaiting_payment', 'pending', 'processing'])) { return response()->json(['message' => 'Cannot cancel this order.'], 400); }
+        if (! in_array($transaction->status, ['awaiting_payment', 'pending', 'processing'])) {
+            return response()->json(['message' => 'Cannot cancel this order.'], 400);
+        }
         if ($transaction->status === 'processing' && $transaction->shipping_method === 'biteship' && ! empty($transaction->biteship_order_id)) {
             try {
                 $res = Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->get('https://api.biteship.com/v1/orders/'.$transaction->biteship_order_id);
@@ -2041,7 +2073,8 @@ class TransactionController extends Controller
                     }
                     Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->delete('https://api.biteship.com/v1/orders/'.$transaction->biteship_order_id);
                 }
-            } catch (\Exception $e) {}
+            } catch (\Exception $e) {
+            }
 
             try {
                 $transaction->load('payment');
@@ -2052,7 +2085,7 @@ class TransactionController extends Controller
                         $xenditInvoiceId = $invoices[0]['id'];
                         $refundApi = new RefundApi;
                         $refundRequest = new CreateRefund([
-                            'invoice_id' => $xenditInvoiceId, 'reason' => 'REQUESTED_BY_CUSTOMER', 'amount' => (int) $transaction->total_amount, 'metadata' => ['order_id' => $transaction->order_id]
+                            'invoice_id' => $xenditInvoiceId, 'reason' => 'REQUESTED_BY_CUSTOMER', 'amount' => (int) $transaction->total_amount, 'metadata' => ['order_id' => $transaction->order_id],
                         ]);
                         $refundApi->createRefund(null, null, $refundRequest);
                     }
@@ -2060,8 +2093,11 @@ class TransactionController extends Controller
             } catch (\Exception $e) {
                 DB::transaction(function () use ($transaction) {
                     $transaction->update(['status' => 'refund_manual_required']);
-                    foreach ($transaction->details as $detail) { $this->restoreProductStock($detail->product_id, $detail->quantity); }
+                    foreach ($transaction->details as $detail) {
+                        $this->restoreProductStock($detail->product_id, $detail->quantity);
+                    }
                 });
+
                 return response()->json(['message' => 'Order cancelled, but automatic refund failed. Admin will process it manually.']);
             }
         }
@@ -2070,24 +2106,37 @@ class TransactionController extends Controller
             $lockedTransaction = Transaction::lockForUpdate()->find($transaction->id);
             if ($lockedTransaction->status !== 'refund_manual_required' && $lockedTransaction->status !== 'cancelled') {
                 $lockedTransaction->update(['status' => 'cancelled', 'shipping_status' => 'cancelled']);
-                if ($lockedTransaction->points_used > 0) { $lockedTransaction->user->increment('point', $lockedTransaction->points_used); }
+                if ($lockedTransaction->points_used > 0) {
+                    $lockedTransaction->user->increment('point', $lockedTransaction->points_used);
+                }
                 if ($lockedTransaction->promo_code) {
                     PromoClaim::where('email', $lockedTransaction->user->email)->where('promo_code', $lockedTransaction->promo_code)->update(['is_used' => false, 'used_at' => null]);
                 }
-                if ($lockedTransaction->payment) { $lockedTransaction->payment->update(['status' => 'EXPIRED']); }
-                foreach ($lockedTransaction->details as $detail) { $this->restoreProductStock($detail->product_id, $detail->quantity); }
+                if ($lockedTransaction->payment) {
+                    $lockedTransaction->payment->update(['status' => 'EXPIRED']);
+                }
+                foreach ($lockedTransaction->details as $detail) {
+                    $this->restoreProductStock($detail->product_id, $detail->quantity);
+                }
             }
         });
         Cache::flush();
+
         return response()->json(['message' => 'Order cancelled successfully']);
     }
+
     public function confirmComplete(Request $request, $id)
     {
         $transaction = Transaction::where('user_id', $request->user()->id)->findOrFail($id);
-        if ($transaction->status !== 'processing') { return response()->json(['message' => 'Order cannot be completed yet.'], 400); }
+        if ($transaction->status !== 'processing') {
+            return response()->json(['message' => 'Order cannot be completed yet.'], 400);
+        }
         $transaction->update(['status' => 'completed']);
         $transaction->user->refresh();
-        if ($transaction->point > 0 && $transaction->user->is_membership) { $transaction->user->increment('point', $transaction->point); }
+        if ($transaction->point > 0 && $transaction->user->is_membership) {
+            $transaction->user->increment('point', $transaction->point);
+        }
+
         return response()->json(['message' => 'Order completed!']);
     }
 
@@ -2576,7 +2625,7 @@ class TransactionController extends Controller
         }
 
         // Pastikan kita tidak menimpa resi yang sebenarnya sudah sukses
-        if ($transaction->biteship_order_id && !str_starts_with($transaction->tracking_number, 'API ERR') && !str_starts_with($transaction->tracking_number, 'SYS ERR')) {
+        if ($transaction->biteship_order_id && ! str_starts_with($transaction->tracking_number, 'API ERR') && ! str_starts_with($transaction->tracking_number, 'SYS ERR')) {
             return response()->json(['message' => 'Pesanan ini sudah memiliki nomor resi yang valid.'], 400);
         }
 
@@ -2594,7 +2643,7 @@ class TransactionController extends Controller
 
                 return response()->json([
                     'message' => 'Berhasil! Pesanan sukses dikirim ulang ke Biteship.',
-                    'tracking_number' => $transaction->tracking_number
+                    'tracking_number' => $transaction->tracking_number,
                 ]);
             } else {
                 $errorMsg = $order['error'] ?? ($order['message'] ?? 'Unknown Biteship API Error');
@@ -2605,7 +2654,8 @@ class TransactionController extends Controller
                 ]);
 
                 Log::error('Biteship Retry Failed: '.json_encode($order));
-                return response()->json(['message' => 'Gagal request ke Biteship: ' . $errorMsg], 400);
+
+                return response()->json(['message' => 'Gagal request ke Biteship: '.$errorMsg], 400);
             }
         } catch (\Exception $e) {
             $transaction->update([
@@ -2613,7 +2663,7 @@ class TransactionController extends Controller
                 'shipping_status' => 'error',
             ]);
 
-            return response()->json(['message' => 'Terjadi kesalahan sistem internal: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Terjadi kesalahan sistem internal: '.$e->getMessage()], 500);
         }
     }
 
@@ -2741,7 +2791,7 @@ class TransactionController extends Controller
             $accessToken = env('META_CAPI_ACCESS_TOKEN');
 
             // Jika token/pixel ID tidak ada, jangan paksakan (misal di local)
-            if (!$pixelId || !$accessToken) {
+            if (! $pixelId || ! $accessToken) {
                 return;
             }
 
@@ -2785,8 +2835,8 @@ class TransactionController extends Controller
                             'content_type' => 'product',
                             'order_id' => $transaction->order_id,
                         ],
-                    ]
-                ]
+                    ],
+                ],
             ];
 
             // 4. Kirim Request ke Server Meta (Background Process)
@@ -2795,9 +2845,10 @@ class TransactionController extends Controller
 
         } catch (\Exception $e) {
             // Kita log error-nya, tapi JANGAN gagalkan transaksi pelanggan!
-            \Illuminate\Support\Facades\Log::warning('Meta CAPI Error: ' . $e->getMessage());
+            Log::warning('Meta CAPI Error: '.$e->getMessage());
         }
     }
+
     // =====================================================================
     // 👇 FUNGSI BARU UNTUK ADMIN MENGHAPUS TRANSAKSI PERMANEN 👇
     // =====================================================================
@@ -2805,7 +2856,7 @@ class TransactionController extends Controller
     {
         $transaction = Transaction::with(['details', 'payment'])->find($id);
 
-        if (!$transaction) {
+        if (! $transaction) {
             return response()->json(['message' => 'Transaksi tidak ditemukan.'], 404);
         }
 
@@ -2815,14 +2866,14 @@ class TransactionController extends Controller
             // 1. KEMBALIKAN STOK BARANG (Jika statusnya belum pernah dikembalikan)
             $statusesThatAlreadyRestoredStock = ['refund_manual_required', 'cancelled', 'shipping_failed', 'returned', 'refunded'];
 
-            if (!in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
+            if (! in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
                 foreach ($transaction->details as $detail) {
                     $this->restoreProductStock($detail->product_id, $detail->quantity);
                 }
             }
 
             // 2. KEMBALIKAN POIN (Opsional: Jika ingin poin uji coba kembali)
-            if ($transaction->points_used > 0 && !in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
+            if ($transaction->points_used > 0 && ! in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
                 $transaction->user->increment('point', $transaction->points_used);
             }
 

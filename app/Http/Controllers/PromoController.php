@@ -394,4 +394,15 @@ class PromoController extends Controller
 
         return response()->json(['message' => 'Kode promo tidak valid atau tidak ditemukan.'], 404);
     }
+
+    public function getActiveCampaigns()
+    {
+        $now = Carbon::now('Asia/Jakarta');
+        $promos = \App\Models\DynamicPromo::where('is_active', true)
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->get(['name', 'banner_badge', 'rules', 'end_date']);
+
+        return response()->json($promos);
+    }
 }
