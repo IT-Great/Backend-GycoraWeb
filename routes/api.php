@@ -566,3 +566,8 @@ Route::get('/exchange-rates', function () {
         ],
     ], 200);
 });
+
+// Taruh di dalam middleware admin Anda
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    Route::apiResource('dynamic-promos', \App\Http\Controllers\Admin\DynamicPromoController::class);
+});
