@@ -21,7 +21,7 @@ class CustomerAnalyticsController extends Controller
                 users.email, 
                 DATEDIFF(NOW(), MAX(transactions.created_at)) as recency_days,
                 COUNT(transactions.id) as frequency_count,
-                SUM(transactions.gross_amount) as monetary_total
+                SUM(transactions.total_amount) as monetary_total
             ')
             ->groupBy('users.id', 'users.first_name', 'users.last_name', 'users.email')
             ->get();
