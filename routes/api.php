@@ -576,3 +576,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     // Rute lainnya...
     Route::get('inventory/predictive', [\App\Http\Controllers\Admin\PredictiveInventoryController::class, 'getPredictiveStock']);
 });
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    // ... rute Anda yang lain ...
+    Route::get('analytics/cohort', [\App\Http\Controllers\Admin\AnalyticsController::class, 'getCohortAnalysis']);
+});
