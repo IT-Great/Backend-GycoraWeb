@@ -278,6 +278,10 @@
 
 use App\Http\Controllers\AccessPolicyController;
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\CustomerAnalyticsController;
+use App\Http\Controllers\Admin\DynamicPromoController;
+use App\Http\Controllers\Admin\PredictiveInventoryController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
@@ -569,15 +573,17 @@ Route::get('/exchange-rates', function () {
 
 // Taruh di dalam middleware admin Anda
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
-    Route::apiResource('dynamic-promos', \App\Http\Controllers\Admin\DynamicPromoController::class);
+    Route::apiResource('dynamic-promos', DynamicPromoController::class);
 });
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     // Rute lainnya...
-    Route::get('inventory/predictive', [\App\Http\Controllers\Admin\PredictiveInventoryController::class, 'getPredictiveStock']);
+    Route::get('inventory/predictive', [PredictiveInventoryController::class, 'getPredictiveStock']);
 });
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     // ... rute Anda yang lain ...
-    Route::get('analytics/cohort', [\App\Http\Controllers\Admin\AnalyticsController::class, 'getCohortAnalysis']);
+    Route::get('analytics/cohort', [AnalyticsController::class, 'getCohortAnalysis']);
+    // Pastikan diletakkan di dalam middleware auth:sanctum admin Anda
+    Route::get('analytics/rfm', [CustomerAnalyticsController::class, 'getRfmSegmentation']);
 });
