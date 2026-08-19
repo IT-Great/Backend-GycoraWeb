@@ -571,3 +571,8 @@ Route::get('/exchange-rates', function () {
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::apiResource('dynamic-promos', \App\Http\Controllers\Admin\DynamicPromoController::class);
 });
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    // Rute lainnya...
+    Route::get('inventory/predictive', [\App\Http\Controllers\Admin\PredictiveInventoryController::class, 'getPredictiveStock']);
+});
