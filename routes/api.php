@@ -544,7 +544,6 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::put('/access-policies', [AccessPolicyController::class, 'update']);
     });
 
-    // ... (rute CRUD user dan lainnya yang sebelumnya sudah dibuat)
 });
 
 // =========================================================================
