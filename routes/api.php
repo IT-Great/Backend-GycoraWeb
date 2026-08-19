@@ -443,6 +443,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/transactions/{id}/print-label', [TransactionController::class, 'printLabel']);
 
     Route::post('/admin/transactions/{id}/retry-shipping', [TransactionController::class, 'retryShipping']);
+    Route::post('transactions/{id}/approve-fraud', [TransactionController::class, 'approveFraudOrder']);
 
     Route::delete('/admin/transactions/{id}', [TransactionController::class, 'forceDeleteTransaction']);
 
