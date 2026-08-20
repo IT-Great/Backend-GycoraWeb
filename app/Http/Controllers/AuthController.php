@@ -154,18 +154,32 @@ class AuthController extends Controller
     // =========================================================================
     // 4. AMBIL SEMUA USER (Khusus Pelanggan)
     // =========================================================================
-    public function getAllUsers()
-    {
-        // Mengambil user yang bukan admin/staf
-        $users = User::where('usertype', 'user')
-            ->orderBy('id', 'desc')
-            ->get(['id', 'first_name', 'last_name', 'email', 'usertype', 'is_subscribed', 'created_at']);
+    // public function getAllUsers()
+    // {
+    //     // Mengambil user yang bukan admin/staf
+    //     $users = User::whereIn('usertype', ['user', 'reseller'])
+    //         ->orderBy('id', 'desc')
+    //         ->get(['id', 'first_name', 'last_name', 'email', 'usertype', 'is_subscribed', 'created_at']);
 
-        // Jika Anda ingin memastikan format tanggal sama persis seperti respons Golang,
-        // Anda bisa melakukan map pada collection, tapi default JSON Eloquent biasanya sudah cukup baik.
-        // Format default created_at Eloquent: "2024-05-12T10:00:00.000000Z"
+    //     // Jika Anda ingin memastikan format tanggal sama persis seperti respons Golang,
+    //     // Anda bisa melakukan map pada collection, tapi default JSON Eloquent biasanya sudah cukup baik.
+    //     // Format default created_at Eloquent: "2024-05-12T10:00:00.000000Z"
 
-        return response()->json($users);
+    //     return response()->json($users);
+    // }
+
+    public function getAllUsers() {
+        $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
+        $aiUser = User::where('email', 'ai@gycora.com')->first();
+        if ($aiUser && !in_array($aiUser->id, $adminIds)) $adminIds[] = $aiUser->id;
+
+        $users = User::whereIn('usertype', ['user', 'reseller'])
+            ->withCount(['messages as unread_count' => function ($query) use ($adminIds) {
+                $query->where('is_read', false)->whereIn('receiver_id', $adminIds);
+            }])
+            ->latest()->get();
+
+        return response()->json(['data' => $users], 200);
     }
 
     // =========================================================================
@@ -393,6 +407,69 @@ class AuthController extends Controller
     //     }
     // }
 
+    // public function updateImage(Request $request)
+    // {
+    //     Log::info('Update profile image started', [
+    //         'user_id' => $request->user()->id
+    //     ]);
+
+    //     $request->validate([
+    //         'image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
+    //     ]);
+
+    //     $user = $request->user();
+
+    //     try {
+    //         // [PERBAIKAN] Jika ada foto lama, hapus dari Local Storage
+    //         if ($user->profile_image) {
+    //             // Bersihkan URL agar hanya menyisakan path relatifnya saja
+    //             $oldPath = str_replace(url(Storage::url('')), '', $user->profile_image);
+    //             $oldPath = ltrim(str_replace('/storage/', '', $oldPath), '/');
+
+    //             Log::info('Deleting old profile image', [
+    //                 'user_id' => $user->id,
+    //                 'old_path' => $oldPath
+    //             ]);
+
+    //             Storage::disk('public')->delete($oldPath);
+    //         }
+
+    //         // [PERBAIKAN] Upload foto baru ke Local Storage (disk 'public' -> storage/app/public/profiles)
+    //         $path = $request->file('image')->store('profiles', 'public');
+
+    //         Log::info('New profile image uploaded', [
+    //             'user_id' => $user->id,
+    //             'new_path' => $path
+    //         ]);
+
+    //         // [PERBAIKAN] Karena kita tidak memakai Accessor di User Model, kita simpan URL penuhnya langsung
+    //         $user->profile_image = url(Storage::url($path));
+    //         $user->save();
+
+    //         $user = $user->fresh();
+
+    //         Log::info('Profile image updated successfully', [
+    //             'user_id' => $user->id,
+    //             'profile_image_url' => $user->profile_image
+    //         ]);
+
+    //         return response()->json([
+    //             'message' => 'Foto profil diperbarui',
+    //             'user' => $user
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         Log::error('Failed to update profile image', [
+    //             'user_id' => $user->id ?? null,
+    //             'error_message' => $e->getMessage(),
+    //             'trace' => $e->getTraceAsString()
+    //         ]);
+
+    //         return response()->json([
+    //             'message' => 'Gagal memperbarui foto profil'
+    //         ], 500);
+    //     }
+    // }
+
     public function updateImage(Request $request)
     {
         Log::info('Update profile image started', [
@@ -406,21 +483,23 @@ class AuthController extends Controller
         $user = $request->user();
 
         try {
-            // [PERBAIKAN] Jika ada foto lama, hapus dari Local Storage
-            if ($user->profile_image) {
-                // Bersihkan URL agar hanya menyisakan path relatifnya saja
-                $oldPath = str_replace(url(Storage::url('')), '', $user->profile_image);
-                $oldPath = ltrim(str_replace('/storage/', '', $oldPath), '/');
+            // [PERBAIKAN] Logika penghapusan foto lama yang lebih tangguh
+            // Memastikan kita hanya mencoba menghapus file lokal (yang memiliki '/storage/' di URL-nya)
+            if ($user->profile_image && str_contains($user->profile_image, '/storage/')) {
 
-                Log::info('Deleting old profile image', [
-                    'user_id' => $user->id,
-                    'old_path' => $oldPath
-                ]);
+                // Ekstrak nama file/path murni dari URL, contoh: "profiles/namafoto.png"
+                $oldPath = explode('/storage/', $user->profile_image)[1] ?? null;
 
-                Storage::disk('public')->delete($oldPath);
+                if ($oldPath) {
+                    Log::info('Deleting old profile image', [
+                        'user_id' => $user->id,
+                        'old_path' => $oldPath
+                    ]);
+                    Storage::disk('public')->delete($oldPath);
+                }
             }
 
-            // [PERBAIKAN] Upload foto baru ke Local Storage (disk 'public' -> storage/app/public/profiles)
+            // Upload foto baru ke Local Storage (disk 'public' -> storage/app/public/profiles)
             $path = $request->file('image')->store('profiles', 'public');
 
             Log::info('New profile image uploaded', [
@@ -428,8 +507,9 @@ class AuthController extends Controller
                 'new_path' => $path
             ]);
 
-            // [PERBAIKAN] Karena kita tidak memakai Accessor di User Model, kita simpan URL penuhnya langsung
-            $user->profile_image = url(Storage::url($path));
+            // [PERBAIKAN UTAMA] Gunakan asset() agar secara mutlak menunjuk ke domain server Anda saat ini
+            // Hasilnya akan menjadi: https://domain-anda.com/storage/profiles/xxx.png
+            $user->profile_image = asset('storage/' . $path);
             $user->save();
 
             $user = $user->fresh();
@@ -789,5 +869,25 @@ class AuthController extends Controller
         }
 
         return false;
+    }
+
+    // ====================================================================
+    // FUNGSI BARU: SILENT TOKEN REFRESH
+    // ====================================================================
+    public function refreshToken(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Cabut/Hapus token yang saat ini sedang dipakai (kedaluwarsa/hampir kedaluwarsa)
+        $user->currentAccessToken()->delete();
+
+        // 2. Terbitkan token baru
+        $newToken = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Token berhasil diperbarui secara silent',
+            'access_token' => $newToken,
+            'user' => $user
+        ], 200);
     }
 }

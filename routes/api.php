@@ -278,6 +278,10 @@
 
 use App\Http\Controllers\AccessPolicyController;
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\CustomerAnalyticsController;
+use App\Http\Controllers\Admin\DynamicPromoController;
+use App\Http\Controllers\Admin\PredictiveInventoryController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
@@ -344,10 +348,13 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/inactive', [ProductController::class, 'inactiveProducts']);
 Route::get('/products/{slug}', [ProductController::class, 'show']);
 Route::get('/products/{slug}/variants', [ProductController::class, 'getRelatedVariants']);
+Route::get('/products/{id}/recommendations', [ProductController::class, 'getRecommendations']);
+Route::get('/search/products', [ProductController::class, 'search']);
 
 Route::post('/biteship/callback', [TransactionController::class, 'biteshipCallback']);
 Route::post('/payments/callback', [PaymentController::class, 'callback']);
 Route::post('/promo/claim', [PromoController::class, 'claim']);
+Route::get('/promos/active', [PromoController::class, 'getActiveCampaigns']);
 
 Route::get('/landing-page/consult', [ConsultController::class, 'getConsultPageData']);
 Route::get('/products/{slug}/reviews', [ReviewController::class, 'getProductReviews']);
@@ -374,6 +381,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/presigned-url', [AuthController::class, 'getProfilePresignedUrl']);
     Route::post('/admin/update-image', [AuthController::class, 'updateAdminImage']);
     Route::post('/admin/update-password', [AuthController::class, 'updateAdminPassword']);
+    Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
 
     Route::get('/admin/messages', [ContactController::class, 'getInboundMessages']);
     Route::get('/admin/messages/{id}', [ContactController::class, 'showAdminMessage']);
@@ -435,6 +443,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/transactions/{id}/print-label', [TransactionController::class, 'printLabel']);
 
     Route::post('/admin/transactions/{id}/retry-shipping', [TransactionController::class, 'retryShipping']);
+    Route::post('transactions/{id}/approve-fraud', [TransactionController::class, 'approveFraudOrder']);
+
+    Route::delete('/admin/transactions/{id}', [TransactionController::class, 'forceDeleteTransaction']);
 
     Route::get('/admin/sales-report', [TransactionController::class, 'salesReport']);
 
@@ -488,10 +499,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/reviews', [ReviewController::class, 'indexAdmin']);
     Route::delete('/admin/reviews/{id}', [ReviewController::class, 'destroyAdmin']);
 
+    // 👇 Tambahkan dua baris ini untuk fitur AI Reviews 👇
+    Route::get('/admin/reviews-summary', [ReviewController::class, 'generateSummary']);
+    Route::post('/admin/reviews/{id}/ai-reply', [ReviewController::class, 'generateAutoReply']);
+
     // Chat
     Route::get('/staff-list', [ChatController::class, 'getStaffList']);
     Route::get('/messages/{userId}', [ChatController::class, 'getMessages']);
     Route::post('/messages', [ChatController::class, 'sendMessage']);
+    Route::post('/chat/read/{senderId}', [ChatController::class, 'markAsRead']);
 
     // Audit
     Route::get('/admin/audit-logs', [AuditLogController::class, 'index']);
@@ -513,6 +529,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('/predicted-bestsellers', [DashboardController::class, 'getPredictedBestsellers']);
     Route::get('/recent-activities', [DashboardController::class, 'getRecentActivities']);
     Route::get('/daily-average', [DashboardController::class, 'getAverageDailyRevenue']);
+    Route::get('/ai-insights', [DashboardController::class, 'getAiInsights']);
+    Route::get('analytics/ab-test', [DashboardController::class, 'getABTestResults']);
 });
 
 // Di dalam Grup Middleware Khusus Admin Gycora
@@ -553,4 +571,21 @@ Route::get('/exchange-rates', function () {
             'last_updated' => now()->timezone('Asia/Jakarta')->toDateTimeString(),
         ],
     ], 200);
+});
+
+// Taruh di dalam middleware admin Anda
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    Route::apiResource('dynamic-promos', DynamicPromoController::class);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    // Rute lainnya...
+    Route::get('inventory/predictive', [PredictiveInventoryController::class, 'getPredictiveStock']);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    // ... rute Anda yang lain ...
+    Route::get('analytics/cohort', [AnalyticsController::class, 'getCohortAnalysis']);
+    // Pastikan diletakkan di dalam middleware auth:sanctum admin Anda
+    Route::get('analytics/rfm', [CustomerAnalyticsController::class, 'getRfmSegmentation']);
 });

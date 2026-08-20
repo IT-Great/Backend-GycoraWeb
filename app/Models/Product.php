@@ -75,9 +75,11 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Laravel\Scout\Searchable; // 👈 1. Import Searchable Trait
 
 class Product extends Model
 {
+    use Searchable; // 👈 2. Gunakan Trait ini
     use HasFactory;
     use Auditable;
 
@@ -95,6 +97,11 @@ class Product extends Model
         'discount_prices',
         'wholesale_price', 'wholesale_prices',
         'voucher_discount_price', 'voucher_discount_prices',
+        'is_bundle_active', // <-- BARU
+        'bundle_price',     // <-- BARU
+        'bundle_prices',    // <-- BARU
+        'bundle_start_date', // <-- BARU
+        'bundle_end_date',  // <-- BARU
         'stock',
         'image_url',
         'variant_images',
@@ -110,7 +117,12 @@ class Product extends Model
         'prices' => 'array',
         'discount_prices' => 'array',
         'wholesale_prices' => 'array',
+        'bundle_price' => 'decimal:2', // <-- BARU
         'voucher_discount_prices' => 'array',
+        'bundle_prices' => 'array', // <-- BARU
+        'is_bundle_active' => 'boolean', // <-- BARU
+        'bundle_start_date' => 'datetime', // <-- BARU
+        'bundle_end_date' => 'datetime', // <-- BARU
         'stock' => 'integer',
         'variant_images' => 'array',
         'color' => 'array',
@@ -152,5 +164,25 @@ class Product extends Model
         // Asumsi file disimpan di storage/app/public/uploads
         $pathOnly = str_starts_with($value, '/') ? $value : '/' . $value;
         return asset('storage' . $pathOnly);
+    }
+
+    // 👇 [BARU] GATEKEEPER: Hanya produk 'active' yang boleh masuk ke Meilisearch
+    public function shouldBeSearchable()
+    {
+        return $this->status === 'active';
+    }
+
+    /**
+     * 3. Tentukan data apa saja yang akan dikirim (di-index) ke Meilisearch.
+     * Kita hanya mengirim teks yang relevan untuk memperingan beban memory.
+     */
+    public function toSearchableArray()
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'sku' => $this->sku,
+            'category_name' => $this->category ? $this->category->name : '',
+        ];
     }
 }
