@@ -1108,4 +1108,18 @@ class DashboardController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
+    // Jangan lupa import: use Illuminate\Support\Facades\DB;
+
+    public function getABTestResults()
+    {
+        $results = DB::table('transactions')
+            ->select('ab_test_variant as variant', DB::raw('count(*) as total_checkouts'), DB::raw('sum(total_amount) as total_revenue'))
+            ->whereIn('status', ['paid', 'processing', 'shipped', 'completed']) // Hanya transaksi sukses
+            ->whereNotNull('ab_test_variant')
+            ->groupBy('ab_test_variant')
+            ->get();
+
+        return response()->json($results);
+    }
 }

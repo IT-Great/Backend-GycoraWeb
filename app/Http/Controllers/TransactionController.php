@@ -3006,6 +3006,7 @@ class TransactionController extends Controller
             'courier_company' => 'nullable|string',
             'courier_type' => 'nullable|string',
             'delivery_type' => 'nullable|string',
+            'ab_test_variant' => 'nullable|string|in:A,B',
         ]);
 
         $user = $request->user();
@@ -3247,6 +3248,7 @@ class TransactionController extends Controller
                 'promo_discount' => $promoDiscountAmount,
                 'fraud_score' => $fraudAnalysis['score'], // [BARU] Simpan skor fraud
                 'fraud_flags' => $fraudAnalysis['flags'], // [BARU] Simpan detail bahaya (JSON)
+                'ab_test_variant' => $request->ab_test_variant ?? 'A',
             ]);
 
             // =========================================================================
@@ -3457,7 +3459,7 @@ class TransactionController extends Controller
 
         $locked = Transaction::where('id', $id)
             ->where('status', 'refund_approved')
-            ->update(['status' => 'refund_processing']); 
+            ->update(['status' => 'refund_processing']);
 
         if (! $locked) {
             return response()->json(['message' => 'Refund is already being processed or not valid.'], 400);
@@ -3495,7 +3497,7 @@ class TransactionController extends Controller
 
                         $cancelData = $cancelRes->json();
                         if (isset($cancelData['success']) && $cancelData['success'] === false) {
-                            $transaction->update(['status' => 'refund_approved']); 
+                            $transaction->update(['status' => 'refund_approved']);
 
                             return response()->json([
                                 'message' => 'Failed to cancel courier. Refund aborted to prevent loss.',
@@ -3504,7 +3506,7 @@ class TransactionController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                $transaction->update(['status' => 'refund_approved']); 
+                $transaction->update(['status' => 'refund_approved']);
                 Log::error('Biteship Pre-Check Error: '.$e->getMessage());
 
                 return response()->json(['message' => 'Failed to verify logistics status. Try again later.'], 500);
@@ -3572,11 +3574,11 @@ class TransactionController extends Controller
                 ], 200);
             }
 
-            $transaction->update(['status' => 'refund_approved']); 
+            $transaction->update(['status' => 'refund_approved']);
 
             return response()->json(['message' => 'Xendit Refund Failed: '.$errorMessage], 422);
         } catch (\Exception $e) {
-            $transaction->update(['status' => 'refund_approved']); 
+            $transaction->update(['status' => 'refund_approved']);
 
             return response()->json(['message' => 'Refund Error: '.$e->getMessage()], 500);
         }
@@ -3673,7 +3675,7 @@ class TransactionController extends Controller
             ->get();
 
         return response()->json([
-            'data' => $report, 
+            'data' => $report,
         ]);
     }
 
@@ -3726,7 +3728,7 @@ class TransactionController extends Controller
                 if (isset($response['success']) && $response['success'] === true) {
                     $trackingData[$transaction->id] = $response->json();
                 } else {
-                    $trackingData[$transaction->id] = ['status' => 'pending']; 
+                    $trackingData[$transaction->id] = ['status' => 'pending'];
                 }
             } catch (\Exception $e) {
                 $trackingData[$transaction->id] = ['status' => 'error fetching data'];
@@ -3771,7 +3773,7 @@ class TransactionController extends Controller
 
     public function adminTrackOrder($id)
     {
-        $transaction = Transaction::findOrFail($id); 
+        $transaction = Transaction::findOrFail($id);
 
         if ($transaction->shipping_method !== 'biteship' || ! $transaction->biteship_order_id) {
             return response()->json(['message' => 'Tracking information is not available yet.'], 400);
@@ -3875,7 +3877,7 @@ class TransactionController extends Controller
     public function biteshipCallback(Request $request)
     {
         $biteshipOrderId = $request->input('order_id');
-        $status = strtolower($request->input('status')); 
+        $status = strtolower($request->input('status'));
         $waybill = $request->input('courier_waybill_id');
 
         \Log::info('Biteship Webhook Received: ', $request->all());
@@ -3950,7 +3952,7 @@ class TransactionController extends Controller
 
         $totalSpent = Transaction::where('user_id', $user->id)
             ->where('status', 'completed')
-            ->sum('total_amount'); 
+            ->sum('total_amount');
 
         if ($totalSpent >= 100000) {
             $user->update(['is_membership' => true]);
@@ -3993,12 +3995,12 @@ class TransactionController extends Controller
             $payload = [
                 'data' => [
                     [
-                        'event_name' => 'Purchase', 
+                        'event_name' => 'Purchase',
                         'event_time' => time(),
                         'action_source' => 'website',
                         'user_data' => $userData,
                         'custom_data' => [
-                            'currency' => 'IDR', 
+                            'currency' => 'IDR',
                             'value' => (float) $totalAmount,
                             'contents' => $contents,
                             'content_type' => 'product',
