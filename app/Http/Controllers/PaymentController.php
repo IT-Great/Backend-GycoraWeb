@@ -824,13 +824,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Address;
 use App\Models\Payment;
-use App\Models\Transaction;
-use App\Services\BiteshipService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Xendit\Configuration;
-use Xendit\Invoice\CreateInvoiceRequest;
+use App\Models\Transaction;
+use Illuminate\Http\Request;
 use Xendit\Invoice\InvoiceApi;
+use App\Services\BiteshipService;
+use Illuminate\Support\Facades\DB;
+use Xendit\Invoice\CreateInvoiceRequest;
 
 class PaymentController extends Controller
 {
@@ -838,6 +838,153 @@ class PaymentController extends Controller
     {
         Configuration::setXenditKey(config('services.xendit.secret_key'));
     }
+
+    // public function createInvoice(Request $request)
+    // {
+    //     $request->validate([
+    //         'transaction_id' => 'required|exists:transactions,id',
+    //         'address_id' => 'required',
+    //         'shipping_method' => 'required|in:free,biteship',
+    //         'courier_company' => 'nullable|string',
+    //         'courier_type' => 'nullable|string',
+    //         'shipping_cost' => 'nullable|numeric',
+    //         'delivery_type' => 'nullable|string|in:now,later,scheduled',
+    //         'delivery_date' => 'nullable|date',
+    //         'delivery_time' => 'nullable|date_format:H:i',
+    //         'use_points' => 'nullable|integer|min:0',
+    //     ]);
+
+    //     $transaction = Transaction::with(['user', 'details.product', 'payment'])
+    //         ->where('user_id', $request->user()->id)
+    //         ->findOrFail($request->transaction_id);
+
+    //     if ($transaction->payment && $transaction->payment->status === 'pending' && ! empty($transaction->payment->checkout_url)) {
+    //         return response()->json([
+    //             'checkout_url' => $transaction->payment->checkout_url,
+    //         ]);
+    //     }
+
+    //     // 👇 PERBAIKAN 1: Hapus perkalian dengan $totalQuantity 👇
+    //     if (! $transaction->shipping_cost || $transaction->shipping_cost == 0) {
+    //         $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
+
+    //         $courierCompany = $request->shipping_method === 'free' ? 'Internal' : $request->courier_company;
+    //         $courierType = $request->shipping_method === 'free' ? 'Next Day' : $request->courier_type;
+
+    //         $transaction->update([
+    //             'address_id' => $request->address_id,
+    //             'shipping_method' => $request->shipping_method,
+    //             'courier_company' => $courierCompany,
+    //             'courier_type' => $courierType,
+    //             'shipping_cost' => $totalShippingCost, // Ongkir Flat
+    //             'total_amount' => $transaction->total_amount,
+    //             'delivery_type' => $request->shipping_method === 'free' ? 'later' : ($request->delivery_type ?? 'later'),
+    //             'delivery_date' => $request->delivery_date,
+    //             'delivery_time' => $request->delivery_time,
+    //             'status' => 'pending',
+    //         ]);
+    //     }
+
+    //     $user = $request->user();
+
+    //     $pointsUsed = $transaction->points_used ?? 0;
+    //     $conversionRate = 1000;
+    //     $pointDiscountAmount = $pointsUsed * $conversionRate;
+
+    //     $promoDiscount = $transaction->promo_discount ?? 0;
+    //     $subtotalAfterPromo = max(0, $transaction->total_amount - $promoDiscount);
+    //     $pointDiscountAmount = min($pointDiscountAmount, $subtotalAfterPromo);
+
+    //     $externalId = 'PAY-'.$transaction->order_id.($transaction->payment ? '-'.time() : '');
+
+    //     $items = [];
+
+    //     foreach ($transaction->details as $detail) {
+    //         $productName = $detail->product->name;
+
+    //         if (!empty($detail->color)) {
+    //             $cleanColorString = stripslashes($detail->color);
+    //             $colorDecoded = json_decode($cleanColorString, true);
+
+    //             if (json_last_error() === JSON_ERROR_NONE && is_array($colorDecoded)) {
+    //                 $colorLabel = !empty($colorDecoded['name']) ? trim($colorDecoded['name']) : trim($colorDecoded['hex']);
+    //                 $productName .= ' - ' . $colorLabel;
+    //             } else {
+    //                 $productName .= ' - ' . $detail->color;
+    //             }
+    //         }
+
+    //         $items[] = [
+    //             'name' => $productName,
+    //             'quantity' => $detail->quantity,
+    //             'price' => (int) $detail->price,
+    //             'category' => 'PHYSICAL_PRODUCT',
+    //         ];
+    //     }
+
+    //     if ($promoDiscount > 0) {
+    //         $items[] = [
+    //             'name' => 'Promo Code: ' . ($transaction->promo_code ?? 'DISCOUNT'),
+    //             'quantity' => 1,
+    //             'price' => -(int) $promoDiscount,
+    //             'category' => 'DISCOUNT',
+    //         ];
+    //     }
+
+    //     if ($pointDiscountAmount > 0) {
+    //         $items[] = [
+    //             'name' => 'Loyalty Point Discount ('.$pointsUsed.' Pts)',
+    //             'quantity' => 1,
+    //             'price' => -(int) $pointDiscountAmount,
+    //             'category' => 'DISCOUNT',
+    //         ];
+    //     }
+
+    //     // 👇 PERBAIKAN 2: Jadikan ongkir sebagai 1 entitas tunggal (Flat Rate) di Struk Xendit 👇
+    //     if ($transaction->shipping_cost > 0) {
+    //         $items[] = [
+    //             'name' => 'Shipping Cost ('.$transaction->courier_company.')',
+    //             'quantity' => 1, // Mutlak 1
+    //             'price' => (int) $transaction->shipping_cost, // Tarif Utuh
+    //             'category' => 'SHIPPING_FEE',
+    //         ];
+    //     }
+
+    //     // 👇 PERBAIKAN 3: Hitung total akhir secara langsung tanpa manipulasi kali-bagi 👇
+    //     $finalAmount = (int) $transaction->total_amount
+    //                  + (int) $transaction->shipping_cost
+    //                  - $pointDiscountAmount
+    //                  - $promoDiscount;
+
+    //     $invoiceRequest = new CreateInvoiceRequest([
+    //         'external_id' => $externalId,
+    //         'payer_email' => $transaction->user->email,
+    //         'amount' => $finalAmount,
+    //         'description' => 'Payment for Order '.$transaction->order_id,
+    //         'items' => $items,
+    //         'success_redirect_url' => config('app.frontend_url')
+    //             .'/payment-success?external_id='.$externalId
+    //             .'&order_id='.$transaction->order_id,
+    //         'failure_redirect_url' => config('app.frontend_url').'/payment-failed',
+    //     ]);
+
+    //     $api = new InvoiceApi;
+    //     $invoice = $api->createInvoice($invoiceRequest);
+
+    //     Payment::updateOrCreate(
+    //         ['transaction_id' => $transaction->id],
+    //         [
+    //             'external_id' => $externalId,
+    //             'checkout_url' => $invoice['invoice_url'],
+    //             'amount' => $transaction->total_amount,
+    //             'status' => 'pending',
+    //         ]
+    //     );
+
+    //     return response()->json([
+    //         'checkout_url' => $invoice['invoice_url'],
+    //     ]);
+    // }
 
     public function createInvoice(Request $request)
     {
@@ -854,8 +1001,11 @@ class PaymentController extends Controller
             'use_points' => 'nullable|integer|min:0',
         ]);
 
+        // 🌟 [PERBAIKAN MUTLAK] Ambil ID dari Auth (jika Web) ATAU dari request payload (jika Job Queue) 🌟
+        $userId = $request->user() ? $request->user()->id : $request->user_id;
+
         $transaction = Transaction::with(['user', 'details.product', 'payment'])
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $userId) // Gunakan variabel $userId yang sudah aman
             ->findOrFail($request->transaction_id);
 
         if ($transaction->payment && $transaction->payment->status === 'pending' && ! empty($transaction->payment->checkout_url)) {
@@ -864,7 +1014,6 @@ class PaymentController extends Controller
             ]);
         }
 
-        // 👇 PERBAIKAN 1: Hapus perkalian dengan $totalQuantity 👇
         if (! $transaction->shipping_cost || $transaction->shipping_cost == 0) {
             $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
 
@@ -885,7 +1034,7 @@ class PaymentController extends Controller
             ]);
         }
 
-        $user = $request->user();
+        // HAPUS baris: $user = $request->user(); karena kita sudah tidak butuh lagi
 
         $pointsUsed = $transaction->points_used ?? 0;
         $conversionRate = 1000;
@@ -940,17 +1089,15 @@ class PaymentController extends Controller
             ];
         }
 
-        // 👇 PERBAIKAN 2: Jadikan ongkir sebagai 1 entitas tunggal (Flat Rate) di Struk Xendit 👇
         if ($transaction->shipping_cost > 0) {
             $items[] = [
                 'name' => 'Shipping Cost ('.$transaction->courier_company.')',
-                'quantity' => 1, // Mutlak 1
-                'price' => (int) $transaction->shipping_cost, // Tarif Utuh
+                'quantity' => 1,
+                'price' => (int) $transaction->shipping_cost,
                 'category' => 'SHIPPING_FEE',
             ];
         }
 
-        // 👇 PERBAIKAN 3: Hitung total akhir secara langsung tanpa manipulasi kali-bagi 👇
         $finalAmount = (int) $transaction->total_amount
                      + (int) $transaction->shipping_cost
                      - $pointDiscountAmount
@@ -958,7 +1105,7 @@ class PaymentController extends Controller
 
         $invoiceRequest = new CreateInvoiceRequest([
             'external_id' => $externalId,
-            'payer_email' => $transaction->user->email,
+            'payer_email' => $transaction->user->email, // Cukup panggil dari relasi $transaction->user
             'amount' => $finalAmount,
             'description' => 'Payment for Order '.$transaction->order_id,
             'items' => $items,
