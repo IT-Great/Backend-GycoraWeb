@@ -276,40 +276,40 @@
 //     ], 200);
 // });
 
-use App\Http\Controllers\AccessPolicyController;
-use App\Http\Controllers\AddressController;
-use App\Http\Controllers\Admin\AnalyticsController;
-use App\Http\Controllers\Admin\CustomerAnalyticsController;
-use App\Http\Controllers\Admin\DynamicPromoController;
-use App\Http\Controllers\Admin\PredictiveInventoryController;
-use App\Http\Controllers\AuditLogController;
+use App\Models\Subscriber;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CoaController;
+use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
-use App\Http\Controllers\CategoryCoaController;
-use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChatController;
-use App\Http\Controllers\CoaController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\PromoController;
+use Illuminate\Support\Facades\Broadcast;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\AddressController;
 use App\Http\Controllers\ConsultController;
 use App\Http\Controllers\ContactController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\EventController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\ProductStockController;
-use App\Http\Controllers\PromoController;
+use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ResellerController;
-use App\Http\Controllers\ReviewController;
-use App\Http\Controllers\SearchController;
-use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\TransferReceivePaymentController;
 use App\Http\Controllers\WishlistController;
-use App\Models\Subscriber;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\CategoryCoaController;
+use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\AccessPolicyController;
+use App\Http\Controllers\ProductStockController;
+use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\DynamicPromoController;
+use App\Http\Controllers\TransferReceivePaymentController;
+use App\Http\Controllers\Admin\CustomerAnalyticsController;
+use App\Http\Controllers\Admin\PredictiveInventoryController;
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
@@ -435,6 +435,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/checkout', [TransactionController::class, 'checkout']);
         Route::post('/payments/invoice', [PaymentController::class, 'createInvoice']);
     });
+
+    Route::get('checkout/ticket/{ticketId}', [TransactionController::class, 'checkTicketStatus']);
 
     Route::get('/admin/transactions', [TransactionController::class, 'allTransactions']);
     Route::get('/admin/transactions/{id}', [TransactionController::class, 'adminShow']);
