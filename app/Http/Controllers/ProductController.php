@@ -1417,18 +1417,499 @@
 //     }
 // }
 
+// namespace App\Http\Controllers;
+
+// use App\Models\Product;
+// use App\Models\ProductStock;
+// use Illuminate\Database\Eloquent\ModelNotFoundException;
+// use Illuminate\Database\QueryException;
+// use Illuminate\Http\Request;
+// use Illuminate\Support\Facades\Cache;
+// use Illuminate\Support\Facades\DB;
+// use Illuminate\Support\Facades\Storage;
+// use Illuminate\Support\Facades\Validator;
+// use Illuminate\Support\Str;
+
+// class ProductController extends Controller
+// {
+//     public function index()
+//     {
+//         try {
+//             // 👇 Simpan query ke cache Redis selama 1 jam (3600 detik).
+//             // Jika ada cache bernama 'products_active', langsung gunakan itu.
+//             $products = Cache::remember('products_active', 3600, function () {
+//                 return Product::with('category')->where('status', 'active')->latest()->get();
+//             });
+
+//             return response()->json($products, 200);
+//         } catch (\Exception $e) {
+//             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//         }
+//     }
+
+//     public function inactiveProducts()
+//     {
+//         // HANYA AMBIL YANG INACTIVE
+//         $products = Product::with('category')->where('status', 'inactive')->latest()->get();
+
+//         return response()->json($products, 200);
+//     }
+
+//     public function show($slug)
+//     {
+//         try {
+//             $product = Product::with(['category', 'stocks' => function ($q) {
+//                 $q->orderBy('created_at', 'asc');
+//             }])->where('slug', $slug)->firstOrFail();
+
+//             return response()->json(['status' => 'success', 'data' => $product], 200);
+//         } catch (ModelNotFoundException $e) {
+//             return response()->json(['status' => 'error', 'message' => 'Produk tidak ditemukan.'], 404);
+//         } catch (\Exception $e) {
+//             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//         }
+//     }
+
+//     public function getPresignedUrl(Request $request)
+//     {
+//         $request->validate([
+//             'extension' => 'required|string',
+//             'content_type' => 'required|string',
+//         ]);
+
+//         $filename = 'products/'.Str::random(40).'.'.$request->extension;
+
+//         $uploadResponse = Storage::disk('s3')->temporaryUploadUrl(
+//             $filename,
+//             now()->addMinutes(15),
+//             [
+//                 'ContentType' => $request->content_type,
+//                 'ACL' => 'public-read',
+//             ]
+//         );
+
+//         $fileUrl = env('AWS_URL').'/'.$filename;
+
+//         return response()->json([
+//             'upload_url' => $uploadResponse['url'],
+//             'upload_headers' => $uploadResponse['headers'],
+//             'file_url' => $fileUrl,
+//         ]);
+//     }
+
+//     public function store(Request $request)
+//     {
+//         $validator = Validator::make($request->all(), [
+//             'category_id' => 'required|exists:categories,id',
+//             'sku' => 'required|unique:products',
+//             'name' => 'required|string|max:255',
+//             'description' => 'nullable|string',
+//             'benefits' => 'nullable|string',
+//             'price' => 'required|numeric|min:0',
+//             'discount_price' => 'nullable|numeric|min:0',
+//             'wholesale_price' => 'nullable|numeric|min:0',
+//             'voucher_discount_price' => 'nullable|numeric|min:0',
+
+//             // 👇 Validasi Bundle 👇
+//             'is_bundle_active' => 'boolean',
+//             'bundle_price' => 'nullable|numeric|min:0',
+//             'bundle_start_date' => 'nullable|date',
+//             'bundle_end_date' => 'nullable|date',
+
+//             // 👇 Validasi Multi Currency 👇
+//             'prices' => 'nullable|array',
+//             'prices.*' => 'nullable|numeric|min:0',
+//             'discount_prices' => 'nullable|array',
+//             'discount_prices.*' => 'nullable|numeric|min:0',
+//             'wholesale_prices' => 'nullable|array',
+//             'wholesale_prices.*' => 'nullable|numeric|min:0',
+//             'voucher_discount_prices' => 'nullable|array',
+//             'voucher_discount_prices.*' => 'nullable|numeric|min:0',
+//             'bundle_prices' => 'nullable|array',
+//             'bundle_prices.*' => 'nullable|numeric|min:0',
+
+//             'stock' => 'required|integer|min:0',
+//             'image_url' => 'nullable|string',
+//             'variant_video' => 'nullable|string',
+//             'color' => 'nullable|array',
+//             'status' => 'required|in:active,inactive',
+//         ]);
+
+//         if ($validator->fails()) {
+//             return response()->json($validator->errors(), 422);
+//         }
+
+//         DB::beginTransaction();
+//         try {
+//             $data = $request->all();
+
+//             if (empty($data['slug'])) {
+//                 $data['slug'] = Str::slug($data['name']);
+//             }
+
+//             // Memastikan data Boolean dikonversi dengan benar
+//             $data['is_bundle_active'] = filter_var($request->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
+
+//             // Tangani Array JSON jika kosong
+//             $data['prices'] = $request->input('prices', null);
+//             $data['discount_prices'] = $request->input('discount_prices', null);
+//             $data['wholesale_prices'] = $request->input('wholesale_prices', null);
+//             $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null);
+
+//             $data['bundle_prices'] = $request->input('bundle_prices', null);
+//             $data['bundle_start_date'] = $request->input('bundle_start_date', null);
+//             $data['bundle_end_date'] = $request->input('bundle_end_date', null);
+
+//             $product = Product::create($data);
+
+//             if ($request->stock > 0) {
+//                 $batchCode = 'STK-'.now()->format('YmdHis').'-'.strtoupper(Str::random(4));
+//                 ProductStock::create([
+//                     'product_id' => $product->id,
+//                     'batch_code' => $batchCode,
+//                     'quantity' => $request->stock,
+//                     'initial_quantity' => $request->stock,
+//                 ]);
+//             }
+
+//             DB::commit();
+
+//             // 👇 Hapus cache agar data terbaru segera ditarik oleh user 👇
+//             Cache::forget('products_active');
+
+//             return response()->json($product, 201);
+//         } catch (\Exception $e) {
+//             DB::rollBack();
+
+//             return response()->json(['message' => $e->getMessage()], 500);
+//         }
+//     }
+
+//     public function update(Request $request, $id)
+//     {
+//         $product = Product::findOrFail($id);
+
+//         $validator = Validator::make($request->all(), [
+//             'category_id' => 'required|exists:categories,id',
+//             'sku' => "required|unique:products,sku,$id",
+//             'name' => 'required|string|max:255',
+//             'description' => 'nullable|string',
+//             'benefits' => 'nullable|string',
+//             'price' => 'required|numeric|min:0',
+//             'discount_price' => 'nullable|numeric|min:0',
+//             'wholesale_price' => 'nullable|numeric|min:0',
+//             'voucher_discount_price' => 'nullable|numeric|min:0',
+
+//             // 👇 Validasi Bundle 👇
+//             'is_bundle_active' => 'boolean',
+//             'bundle_price' => 'nullable|numeric|min:0',
+//             'bundle_start_date' => 'nullable|date',
+//             'bundle_end_date' => 'nullable|date',
+
+//             // Validasi Multi Currency
+//             'prices' => 'nullable|array',
+//             'prices.*' => 'nullable|numeric|min:0',
+//             'discount_prices' => 'nullable|array',
+//             'discount_prices.*' => 'nullable|numeric|min:0',
+//             'wholesale_prices' => 'nullable|array',
+//             'wholesale_prices.*' => 'nullable|numeric|min:0',
+//             'voucher_discount_prices' => 'nullable|array',
+//             'voucher_discount_prices.*' => 'nullable|numeric|min:0',
+//             'bundle_prices' => 'nullable|array',
+//             'bundle_prices.*' => 'nullable|numeric|min:0',
+
+//             'image_url' => 'nullable|string',
+//             'variant_video' => 'nullable|string',
+//             'color' => 'nullable|array',
+//             'status' => 'required|in:active,inactive',
+//         ]);
+
+//         if ($validator->fails()) {
+//             return response()->json($validator->errors(), 422);
+//         }
+
+//         $data = $request->except(['stock', '_method']);
+
+//         if ($request->has('name') && $request->name !== $product->name) {
+//             $data['slug'] = Str::slug($request->name);
+//         }
+
+//         $data['is_bundle_active'] = filter_var($request->is_bundle_active, FILTER_VALIDATE_BOOLEAN);
+
+//         // Tangani Array JSON jika kosong
+//         $data['prices'] = $request->input('prices', null);
+//         $data['discount_prices'] = $request->input('discount_prices', null);
+//         $data['wholesale_prices'] = $request->input('wholesale_prices', null);
+//         $data['voucher_discount_prices'] = $request->input('voucher_discount_prices', null);
+//         $data['bundle_prices'] = $request->input('bundle_prices', null);
+//         $data['bundle_start_date'] = $request->input('bundle_start_date', null);
+//         $data['bundle_end_date'] = $request->input('bundle_end_date', null);
+
+//         if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
+//             $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
+//             Storage::disk('s3')->delete($oldKey);
+//         }
+
+//         $product->update($data);
+
+//         // 👇 Hapus cache agar data terbaru segera ditarik oleh user 👇
+//         Cache::forget('products_active');
+
+//         return response()->json($product, 200);
+//     }
+
+//     public function destroy($id)
+//     {
+//         $product = Product::findOrFail($id);
+
+//         // UBAH STATUS JADI INACTIVE (NONAKTIFKAN)
+//         $product->update(['status' => 'inactive']);
+
+//         // 👇 Hapus cache agar data yang dinonaktifkan hilang dari frontend 👇
+//         Cache::forget('products_active');
+
+//         return response()->json(['message' => 'Product deactivated'], 200);
+//     }
+
+//     public function restore($id)
+//     {
+//         $product = Product::findOrFail($id);
+
+//         // KEMBALIKAN KE ACTIVE
+//         $product->update(['status' => 'active']);
+
+//         // 👇 Hapus cache agar data yang diaktifkan kembali muncul di frontend 👇
+//         Cache::forget('products_active');
+
+//         return response()->json(['message' => 'Product activated'], 200);
+//     }
+
+//     public function forceDelete($id)
+//     {
+//         $product = Product::findOrFail($id);
+
+//         if ($product->image_url) {
+//             $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
+//             Storage::disk('s3')->delete($oldKey);
+//         }
+
+//         try {
+//             $product->delete(); // Hapus permanen
+
+//             // 👇 Hapus cache jika data dihapus permanen 👇
+//             Cache::forget('products_active');
+
+//             return response()->json(['message' => 'Product deleted permanently'], 200);
+//         } catch (QueryException $e) {
+//             return response()->json(['message' => 'Produk tidak bisa dihapus karena sudah memiliki riwayat transaksi'], 422);
+//         }
+//     }
+
+//     // FUNGSI BARU UNTUK MENDAPATKAN VARIAN (PRODUK SAUDARA)
+//     public function getRelatedVariants($slug)
+//     {
+//         try {
+//             $product = Product::where('slug', $slug)->firstOrFail();
+
+//             // 1. Ekstrak nama warna dari atribut JSON 'color'
+//             $colorName = '';
+//             if (is_array($product->color) && count($product->color) > 0) {
+//                 $firstColor = $product->color[0];
+//                 if (isset($firstColor['name']) && ! empty($firstColor['name'])) {
+//                     $colorName = trim($firstColor['name']);
+//                 }
+//             }
+
+//             $baseName = $product->name; // Set default awal
+
+//             // 2. Logika Dinamis: Hapus "Nama Warna" dari "Nama Produk Lengkap"
+//             if (! empty($colorName)) {
+//                 // Kita gunakan Regex untuk mencari dan menghapus nama warna yang berada di PALING AKHIR teks (case-insensitive)
+//                 // Contoh: "Gycora Shampoo Rose Gold" dikurangi "Rose Gold" -> "Gycora Shampoo"
+//                 $pattern = '/'.preg_quote($colorName, '/').'$/i';
+//                 $baseName = preg_replace($pattern, '', $product->name);
+//                 $baseName = trim($baseName);
+
+//                 // Jaga-jaga jika hasilnya kosong
+//                 if (empty($baseName)) {
+//                     $baseName = $product->name;
+//                 }
+//             } else {
+//                 // Fallback: Jika kebetulan produk lama tidak punya nama warna, kita buang 1 kata paling akhir
+//                 $nameParts = explode(' ', $product->name);
+//                 if (count($nameParts) > 1) {
+//                     array_pop($nameParts);
+//                     $baseName = implode(' ', $nameParts);
+//                 }
+//             }
+
+//             // 3. Cari produk sekeluarga berdasarkan Base Name murni yang sudah didapat
+//             $relatedProducts = Product::where('status', 'active')
+//                 ->where('category_id', $product->category_id)
+//                 ->where('name', 'like', $baseName.'%')
+//                 ->get(['id', 'name', 'slug', 'color', 'image_url']);
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'current_product' => $product,
+//                 'base_name_detected' => $baseName, // (Opsional) Mengirim base name untuk kemudahan debugging
+//                 'variants' => $relatedProducts,
+//             ], 200);
+
+//         } catch (\Exception $e) {
+//             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//         }
+//     }
+
+//     // =====================================================================
+//     // 👇 ALGORITMA COLLABORATIVE FILTERING (FREQUENTLY BOUGHT TOGETHER) 👇
+//     // =====================================================================
+//     public function getRecommendations($id)
+//     {
+//         try {
+//             // 1. Cari SEMUA ID Transaksi yang pernah memuat produk ini
+//             $transactionIds = DB::table('transaction_details')
+//                 ->where('product_id', $id)
+//                 ->pluck('transaction_id');
+
+//             // 2. Collaborative Filtering: Dari transaksi-transaksi di atas,
+//             // produk apa lagi yang paling banyak dibeli bersamaan?
+//             $recommendedProductIds = DB::table('transaction_details')
+//                 ->whereIn('transaction_id', $transactionIds)
+//                 ->where('product_id', '!=', $id) // Kecualikan produk itu sendiri
+//                 ->select('product_id', DB::raw('count(*) as total_bought_together'))
+//                 ->groupBy('product_id')
+//                 ->orderByDesc('total_bought_together')
+//                 ->take(4) // Ambil 4 produk teratas
+//                 ->pluck('product_id');
+
+//             // 3. Tarik data lengkap produk rekomendasinya
+//             $recommendations = collect();
+//             if ($recommendedProductIds->isNotEmpty()) {
+//                 // Gunakan FIELD agar urutan sesuai frekuensi pembelian terbanyak (bukan acak)
+//                 $orderString = implode(',', $recommendedProductIds->toArray());
+//                 $recommendations = Product::whereIn('id', $recommendedProductIds)
+//                     ->where('status', 'active')
+//                     ->orderByRaw("FIELD(id, $orderString)")
+//                     ->get();
+//             }
+
+//             // 4. FALLBACK LOGIC:
+//             // Jika produk ini masih sangat baru dan belum ada riwayat pembelian bersilangan (kurang dari 4),
+//             // isi kekosongannya dengan produk dari Kategori yang sama secara acak.
+//             if ($recommendations->count() < 4) {
+//                 $product = Product::find($id);
+//                 if ($product) {
+//                     $fallbackProducts = Product::where('category_id', $product->category_id)
+//                         ->where('id', '!=', $id)
+//                         ->whereNotIn('id', $recommendedProductIds) // Jangan duplikat
+//                         ->where('status', 'active')
+//                         ->inRandomOrder()
+//                         ->take(4 - $recommendations->count())
+//                         ->get();
+
+//                     $recommendations = $recommendations->merge($fallbackProducts);
+//                 }
+//             }
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'data' => $recommendations
+//             ], 200);
+
+//         } catch (\Exception $e) {
+//             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//         }
+//     }
+
+//     // FUNGSI BARU: MENGAMBIL PRODUK DENGAN STOK KRITIS (<= 5)
+//     public function getLowStockProducts()
+//     {
+//         try {
+//             $products = Product::where('status', 'active')
+//                 ->where('stock', '<=', 5)
+//                 ->orderBy('stock', 'asc')
+//                 ->get(['id', 'name', 'sku', 'stock', 'image_url']);
+
+//             return response()->json([
+//                 'status' => 'success',
+//                 'data' => $products,
+//             ], 200);
+//         } catch (\Exception $e) {
+//             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//         }
+//     }
+
+//     // // =====================================================================
+//     // // 👇 FITUR PENCARIAN SUPER CEPAT (MEILISEARCH FULL-TEXT SEARCH) 👇
+//     // // =====================================================================
+//     // public function search(Request $request)
+//     // {
+//     //     try {
+//     //         $query = $request->query('q', '');
+
+//     //         // Jika query kosong, kembalikan response kosong agar Frontend tidak crash
+//     //         if (empty(trim($query))) {
+//     //             return response()->json(['status' => 'success', 'data' => []], 200);
+//     //         }
+
+//     //         // Eksekusi pencarian ke Meilisearch melalui Laravel Scout
+//     //         // Kami membatasi hasil maksimal 15 agar response tetap ringan
+//     //         $products = Product::search($query)
+//     //             ->where('status', 'active')
+//     //             ->take(15)
+//     //             ->get();
+
+//     //         // Meilisearch tidak secara otomatis membawa relasi category
+//     //         // Jadi kita load category-nya secara lazy (Eager Loading N+1 Prevention)
+//     //         $products->load('category');
+
+//     //         return response()->json(['status' => 'success', 'data' => $products], 200);
+
+//     //     } catch (\Exception $e) {
+//     //         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//     //     }
+//     // }
+
+//     // =====================================================================
+//     // 👇 FITUR PENCARIAN SUPER CEPAT (MEILISEARCH FULL-TEXT SEARCH) 👇
+//     // =====================================================================
+//     public function search(Request $request)
+//     {
+//         try {
+//             $query = $request->query('q', '');
+
+//             if (empty(trim($query))) {
+//                 return response()->json(['status' => 'success', 'data' => []], 200);
+//             }
+
+//             // 👇 [PERBAIKAN] Hapus ->where('status', 'active') di sini 👇
+//             $products = Product::search($query)
+//                 ->take(15)
+//                 ->get();
+
+//             $products->load('category');
+
+//             return response()->json(['status' => 'success', 'data' => $products], 200);
+
+//         } catch (\Exception $e) {
+//             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+//         }
+//     }
+// }
+
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use Illuminate\Support\Str;
 use App\Models\ProductStock;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ProductController extends Controller
 {
@@ -1762,55 +2243,65 @@ class ProductController extends Controller
     }
 
     // =====================================================================
-    // 👇 ALGORITMA COLLABORATIVE FILTERING (FREQUENTLY BOUGHT TOGETHER) 👇
+    // 👇 ALGORITMA MARKET BASKET ANALYSIS (AI CROSS-SELLING ENGINE) 👇
     // =====================================================================
     public function getRecommendations($id)
     {
         try {
-            // 1. Cari SEMUA ID Transaksi yang pernah memuat produk ini
-            $transactionIds = DB::table('transaction_details')
-                ->where('product_id', $id)
-                ->pluck('transaction_id');
+            // Karena ini kueri yang lumayan berat (Data Mining), kita simpan hasilnya di Cache selama 24 jam.
+            // Sistem hanya perlu melakukan perhitungan matematis 1x sehari untuk setiap produk.
+            $cacheKey = "product_recommendations_{$id}";
 
-            // 2. Collaborative Filtering: Dari transaksi-transaksi di atas,
-            // produk apa lagi yang paling banyak dibeli bersamaan?
-            $recommendedProductIds = DB::table('transaction_details')
-                ->whereIn('transaction_id', $transactionIds)
-                ->where('product_id', '!=', $id) // Kecualikan produk itu sendiri
-                ->select('product_id', DB::raw('count(*) as total_bought_together'))
-                ->groupBy('product_id')
-                ->orderByDesc('total_bought_together')
-                ->take(4) // Ambil 4 produk teratas
-                ->pluck('product_id');
+            $recommendations = Cache::remember($cacheKey, 86400, function () use ($id) {
 
-            // 3. Tarik data lengkap produk rekomendasinya
-            $recommendations = collect();
-            if ($recommendedProductIds->isNotEmpty()) {
-                // Gunakan FIELD agar urutan sesuai frekuensi pembelian terbanyak (bukan acak)
-                $orderString = implode(',', $recommendedProductIds->toArray());
-                $recommendations = Product::whereIn('id', $recommendedProductIds)
-                    ->where('status', 'active')
-                    ->orderByRaw("FIELD(id, $orderString)")
-                    ->get();
-            }
+                // LANGKAH 1: Ambil semua transaksi yang mengandung produk yang sedang dilihat (Produk A)
+                $transactionIds = DB::table('transaction_details')
+                    ->where('product_id', $id)
+                    ->pluck('transaction_id');
 
-            // 4. FALLBACK LOGIC:
-            // Jika produk ini masih sangat baru dan belum ada riwayat pembelian bersilangan (kurang dari 4),
-            // isi kekosongannya dengan produk dari Kategori yang sama secara acak.
-            if ($recommendations->count() < 4) {
-                $product = Product::find($id);
-                if ($product) {
-                    $fallbackProducts = Product::where('category_id', $product->category_id)
-                        ->where('id', '!=', $id)
-                        ->whereNotIn('id', $recommendedProductIds) // Jangan duplikat
+                // LANGKAH 2: Cari Produk B (Cross-Selling)
+                // Algoritma akan mencari produk lain yang berada di keranjang transaksi yang sama
+                $recommendedProductIds = DB::table('transaction_details')
+                    ->whereIn('transaction_id', $transactionIds)
+                    ->where('product_id', '!=', $id) // Kecualikan Produk A itu sendiri
+                    ->select('product_id', DB::raw('count(*) as total_bought_together'))
+                    ->groupBy('product_id')
+                    // 🌟 INTI ALGORITMA: Urutkan berdasarkan yang PALING SERING dibeli bersamaan 🌟
+                    ->orderByDesc('total_bought_together')
+                    ->take(4) // Ambil Top 4 saja
+                    ->pluck('product_id');
+
+                // LANGKAH 3: Tarik Objek Produk Aslinya
+                $results = collect();
+                if ($recommendedProductIds->isNotEmpty()) {
+                    // Gunakan fungsi FIELD() di MySQL agar urutannya tidak teracak kembali
+                    $orderString = implode(',', $recommendedProductIds->toArray());
+                    $results = Product::whereIn('id', $recommendedProductIds)
                         ->where('status', 'active')
-                        ->inRandomOrder()
-                        ->take(4 - $recommendations->count())
+                        ->orderByRaw("FIELD(id, $orderString)")
                         ->get();
-
-                    $recommendations = $recommendations->merge($fallbackProducts);
                 }
-            }
+
+                // LANGKAH 4: FALLBACK / COLD START PROBLEM
+                // Jika produk ini masih sangat baru dan belum ada riwayat pembelian bersilangan (kurang dari 4 hasil),
+                // maka AI akan memunculkan produk dari Kategori yang sama (Similarity Match).
+                if ($results->count() < 4) {
+                    $product = Product::find($id);
+                    if ($product) {
+                        $fallbackProducts = Product::where('category_id', $product->category_id)
+                            ->where('id', '!=', $id)
+                            ->whereNotIn('id', $recommendedProductIds) // Cegah produk duplikat tampil 2x
+                            ->where('status', 'active')
+                            ->inRandomOrder()
+                            ->take(4 - $results->count()) // Penuhi sisa slot yang kosong
+                            ->get();
+
+                        $results = $results->merge($fallbackProducts);
+                    }
+                }
+
+                return $results;
+            });
 
             return response()->json([
                 'status' => 'success',
@@ -1839,37 +2330,6 @@ class ProductController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
-
-    // // =====================================================================
-    // // 👇 FITUR PENCARIAN SUPER CEPAT (MEILISEARCH FULL-TEXT SEARCH) 👇
-    // // =====================================================================
-    // public function search(Request $request)
-    // {
-    //     try {
-    //         $query = $request->query('q', '');
-
-    //         // Jika query kosong, kembalikan response kosong agar Frontend tidak crash
-    //         if (empty(trim($query))) {
-    //             return response()->json(['status' => 'success', 'data' => []], 200);
-    //         }
-
-    //         // Eksekusi pencarian ke Meilisearch melalui Laravel Scout
-    //         // Kami membatasi hasil maksimal 15 agar response tetap ringan
-    //         $products = Product::search($query)
-    //             ->where('status', 'active')
-    //             ->take(15)
-    //             ->get();
-
-    //         // Meilisearch tidak secara otomatis membawa relasi category
-    //         // Jadi kita load category-nya secara lazy (Eager Loading N+1 Prevention)
-    //         $products->load('category');
-
-    //         return response()->json(['status' => 'success', 'data' => $products], 200);
-
-    //     } catch (\Exception $e) {
-    //         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
-    //     }
-    // }
 
     // =====================================================================
     // 👇 FITUR PENCARIAN SUPER CEPAT (MEILISEARCH FULL-TEXT SEARCH) 👇
