@@ -152,6 +152,81 @@ class AuthController extends Controller
     }
 
     // =========================================================================
+    // 👇 FUNGSI BARU: LOGIN DENGAN GOOGLE (SSO) 👇
+    // =========================================================================
+    public function googleLogin(Request $request)
+    {
+        $request->validate([
+            'token' => 'required|string'
+        ]);
+
+        try {
+            // Verifikasi token JWT langsung ke server Google
+            $response = Http::get('https://oauth2.googleapis.com/tokeninfo', [
+                'id_token' => $request->token
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Sesi Google tidak valid atau telah kedaluwarsa.'], 401);
+            }
+
+            $googleUser = $response->json();
+
+            // Pastikan email valid dan terverifikasi dari Google
+            if (!isset($googleUser['email_verified']) || $googleUser['email_verified'] !== 'true') {
+                return response()->json(['message' => 'Email Google belum diverifikasi.'], 401);
+            }
+
+            $email = $googleUser['email'];
+            $firstName = $googleUser['given_name'] ?? 'Google';
+            $lastName = $googleUser['family_name'] ?? 'User';
+            $picture = $googleUser['picture'] ?? null;
+
+            DB::beginTransaction();
+            $user = User::where('email', $email)->first();
+
+            // Jika belum punya akun, daftarkan otomatis (Auto-Register)
+            if (!$user) {
+                $user = User::create([
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'email' => $email,
+                    'password' => Hash::make(Str::random(24)), // Beri password acak 24 karakter (Sangat Aman)
+                    'usertype' => 'user',
+                    'profile_image' => $picture,
+                    'is_subscribed' => false,
+                ]);
+            } else {
+                // Opsional: Tarik foto profil terbaru dari Google jika user belum punya foto
+                if (!$user->profile_image && $picture) {
+                    $user->update(['profile_image' => $picture]);
+                }
+            }
+            DB::commit();
+
+            // Cek otorisasi (pastikan bukan admin yang mencoba masuk via gerbang pelanggan)
+            if (!in_array($user->usertype, ['user', 'reseller'])) {
+                return response()->json(['message' => 'Akun ini tidak memiliki akses ke portal pelanggan.'], 403);
+            }
+
+            // Generate Token via Sanctum
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Login Google Berhasil',
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => $user,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Google Login Error: ' . $e->getMessage());
+            return response()->json(['message' => 'Terjadi kesalahan sistem saat menghubungi Google.'], 500);
+        }
+    }
+
+    // =========================================================================
     // 4. AMBIL SEMUA USER (Khusus Pelanggan)
     // =========================================================================
     // public function getAllUsers()

@@ -322,6 +322,9 @@ Route::middleware('throttle:auth-limiter')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/admin/login', [AuthController::class, 'adminLogin']);
+
+    // 👇 [BARU] Endpoint untuk Google Login
+    Route::post('/auth/google', [AuthController::class, 'googleLogin']);
 });
 
 // --- KLASTER OTP (Dibatasi 3 request / menit) ---
