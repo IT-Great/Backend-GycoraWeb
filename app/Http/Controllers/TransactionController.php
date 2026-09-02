@@ -6891,6 +6891,76 @@ class TransactionController extends Controller
         return response()->json($transactions);
     }
 
+    public function cancelOrder(Request $request, $id)
+    {
+        $transaction = Transaction::where('user_id', $request->user()->id)->findOrFail($id);
+        if (! in_array($transaction->status, ['awaiting_payment', 'pending', 'processing', 'on_hold'])) {
+            return response()->json(['message' => 'Cannot cancel this order.'], 400);
+        }
+        if ($transaction->status === 'processing' && $transaction->shipping_method === 'biteship' && ! empty($transaction->biteship_order_id)) {
+            try {
+                $res = Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->get('https://api.biteship.com/v1/orders/'.$transaction->biteship_order_id);
+                if ($res->successful()) {
+                    $data = $res->json();
+                    $biteshipStatus = strtolower($data['status'] ?? '');
+                    $unCancellableStatuses = ['picked', 'dropping_off', 'delivered', 'return_in_transit', 'returned', 'disposed'];
+                    if (in_array($biteshipStatus, $unCancellableStatuses)) {
+                        return response()->json(['message' => 'Cannot cancel: The package is already being processed by the courier.'], 400);
+                    }
+                    Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->delete('https://api.biteship.com/v1/orders/'.$transaction->biteship_order_id);
+                }
+            } catch (\Exception $e) {
+            }
+
+            try {
+                $transaction->load('payment');
+                if ($transaction->payment && $transaction->payment->external_id) {
+                    $invoiceApi = new InvoiceApi;
+                    $invoices = $invoiceApi->getInvoices(null, $transaction->payment->external_id);
+                    if (! empty($invoices) && count($invoices) > 0) {
+                        $xenditInvoiceId = $invoices[0]['id'];
+                        $refundApi = new RefundApi;
+                        $refundRequest = new CreateRefund([
+                            'invoice_id' => $xenditInvoiceId, 'reason' => 'REQUESTED_BY_CUSTOMER', 'amount' => (int) $transaction->total_amount, 'metadata' => ['order_id' => $transaction->order_id],
+                        ]);
+                        $refundApi->createRefund(null, null, $refundRequest);
+                    }
+                }
+            } catch (\Exception $e) {
+                DB::transaction(function () use ($transaction) {
+                    $transaction->update(['status' => 'refund_manual_required']);
+                    foreach ($transaction->details as $detail) {
+                        $this->restoreProductStock($detail->product_id, $detail->quantity);
+                    }
+                });
+
+                return response()->json(['message' => 'Order cancelled, but automatic refund failed. Admin will process it manually.']);
+            }
+        }
+
+        DB::transaction(function () use ($transaction) {
+            $lockedTransaction = Transaction::lockForUpdate()->find($transaction->id);
+            if ($lockedTransaction->status !== 'refund_manual_required' && $lockedTransaction->status !== 'cancelled') {
+                $lockedTransaction->update(['status' => 'cancelled', 'shipping_status' => 'cancelled']);
+                if ($lockedTransaction->points_used > 0) {
+                    $lockedTransaction->user->increment('point', $lockedTransaction->points_used);
+                }
+                if ($lockedTransaction->promo_code) {
+                    PromoClaim::where('email', $lockedTransaction->user->email)->where('promo_code', $lockedTransaction->promo_code)->update(['is_used' => false, 'used_at' => null]);
+                }
+                if ($lockedTransaction->payment) {
+                    $lockedTransaction->payment->update(['status' => 'EXPIRED']);
+                }
+                foreach ($lockedTransaction->details as $detail) {
+                    $this->restoreProductStock($detail->product_id, $detail->quantity);
+                }
+            }
+        });
+        Cache::flush();
+
+        return response()->json(['message' => 'Order cancelled successfully']);
+    }
+
     public function confirmComplete(Request $request, $id)
     {
         $transaction = Transaction::where('user_id', $request->user()->id)->findOrFail($id);
