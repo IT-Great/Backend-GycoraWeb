@@ -303,6 +303,7 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CategoryCoaController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AccessPolicyController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\Admin\AnalyticsController;
@@ -521,6 +522,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/events', [EventController::class, 'store']);
     Route::put('/admin/events/{id}', [EventController::class, 'update']);
     Route::delete('/admin/events/{id}', [EventController::class, 'destroy']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
 });
 
 // =========================================================================
