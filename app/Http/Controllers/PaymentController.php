@@ -1317,6 +1317,151 @@ class PaymentController extends Controller
         Configuration::setXenditKey(config('services.xendit.secret_key'));
     }
 
+    // public function createInvoice(Request $request)
+    // {
+    //     $request->validate([
+    //         'transaction_id' => 'required|exists:transactions,id',
+    //         'address_id' => 'required',
+    //         'shipping_method' => 'required|in:free,biteship',
+    //         'courier_company' => 'nullable|string',
+    //         'courier_type' => 'nullable|string',
+    //         'shipping_cost' => 'nullable|numeric',
+    //         'delivery_type' => 'nullable|string|in:now,later,scheduled',
+    //         'delivery_date' => 'nullable|date',
+    //         'delivery_time' => 'nullable|date_format:H:i',
+    //         'use_points' => 'nullable|integer|min:0',
+    //     ]);
+
+    //     // 🌟 PERLINDUNGAN ID ON NULL 🌟
+    //     $userId = $request->user_id ?? ($request->user() ? $request->user()->id : null);
+
+    //     if (!$userId) {
+    //         throw new \Exception('Sesi tidak terdeteksi saat pembuatan tagihan.');
+    //     }
+
+    //     $transaction = Transaction::with(['user', 'details.product', 'payment'])
+    //         ->where('user_id', $userId)
+    //         ->findOrFail($request->transaction_id);
+
+    //     if ($transaction->payment && $transaction->payment->status === 'pending' && !empty($transaction->payment->checkout_url)) {
+    //         return response()->json([
+    //             'checkout_url' => $transaction->payment->checkout_url,
+    //         ]);
+    //     }
+
+    //     if (!$transaction->shipping_cost || $transaction->shipping_cost == 0) {
+    //         $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
+
+    //         $courierCompany = $request->shipping_method === 'free' ? 'Internal' : $request->courier_company;
+    //         $courierType = $request->shipping_method === 'free' ? 'Next Day' : $request->courier_type;
+
+    //         $transaction->update([
+    //             'address_id' => $request->address_id,
+    //             'shipping_method' => $request->shipping_method,
+    //             'courier_company' => $courierCompany,
+    //             'courier_type' => $courierType,
+    //             'shipping_cost' => $totalShippingCost,
+    //             'total_amount' => $transaction->total_amount,
+    //             'delivery_type' => $request->shipping_method === 'free' ? 'later' : ($request->delivery_type ?? 'later'),
+    //             'delivery_date' => $request->delivery_date,
+    //             'delivery_time' => $request->delivery_time,
+    //         ]);
+    //     }
+
+    //     $pointsUsed = $transaction->points_used ?? 0;
+    //     $conversionRate = 1000;
+    //     $pointDiscountAmount = $pointsUsed * $conversionRate;
+
+    //     $promoDiscount = $transaction->promo_discount ?? 0;
+    //     $subtotalAfterPromo = max(0, $transaction->total_amount - $promoDiscount);
+    //     $pointDiscountAmount = min($pointDiscountAmount, $subtotalAfterPromo);
+
+    //     $externalId = 'PAY-' . $transaction->order_id . ($transaction->payment ? '-' . time() : '');
+    //     $items = [];
+
+    //     foreach ($transaction->details as $detail) {
+    //         $productName = $detail->product->name;
+    //         if (!empty($detail->color)) {
+    //             $cleanColorString = stripslashes($detail->color);
+    //             $colorDecoded = json_decode($cleanColorString, true);
+    //             if (json_last_error() === JSON_ERROR_NONE && is_array($colorDecoded)) {
+    //                 $colorLabel = !empty($colorDecoded['name']) ? trim($colorDecoded['name']) : trim($colorDecoded['hex']);
+    //                 $productName .= ' - ' . $colorLabel;
+    //             } else {
+    //                 $productName .= ' - ' . $detail->color;
+    //             }
+    //         }
+
+    //         $items[] = [
+    //             'name' => $productName,
+    //             'quantity' => $detail->quantity,
+    //             'price' => (int) $detail->price,
+    //             'category' => 'PHYSICAL_PRODUCT',
+    //         ];
+    //     }
+
+    //     if ($promoDiscount > 0) {
+    //         $items[] = [
+    //             'name' => 'Promo Code: ' . ($transaction->promo_code ?? 'DISCOUNT'),
+    //             'quantity' => 1,
+    //             'price' => -(int) $promoDiscount,
+    //             'category' => 'DISCOUNT',
+    //         ];
+    //     }
+
+    //     if ($pointDiscountAmount > 0) {
+    //         $items[] = [
+    //             'name' => 'Loyalty Point Discount (' . $pointsUsed . ' Pts)',
+    //             'quantity' => 1,
+    //             'price' => -(int) $pointDiscountAmount,
+    //             'category' => 'DISCOUNT',
+    //         ];
+    //     }
+
+    //     if ($transaction->shipping_cost > 0) {
+    //         $items[] = [
+    //             'name' => 'Shipping Cost (' . $transaction->courier_company . ')',
+    //             'quantity' => 1,
+    //             'price' => (int) $transaction->shipping_cost,
+    //             'category' => 'SHIPPING_FEE',
+    //         ];
+    //     }
+
+    //     $finalAmount = (int) $transaction->total_amount
+    //         + (int) $transaction->shipping_cost
+    //         - $pointDiscountAmount
+    //         - $promoDiscount;
+
+    //     $invoiceRequest = new CreateInvoiceRequest([
+    //         'external_id' => $externalId,
+    //         'payer_email' => $transaction->user->email,
+    //         'amount' => $finalAmount,
+    //         'description' => 'Payment for Order ' . $transaction->order_id,
+    //         'items' => $items,
+    //         'success_redirect_url' => config('app.frontend_url')
+    //             . '/payment-success?external_id=' . $externalId
+    //             . '&order_id=' . $transaction->order_id,
+    //         'failure_redirect_url' => config('app.frontend_url') . '/payment-failed',
+    //     ]);
+
+    //     $api = new InvoiceApi;
+    //     $invoice = $api->createInvoice($invoiceRequest);
+
+    //     Payment::updateOrCreate(
+    //         ['transaction_id' => $transaction->id],
+    //         [
+    //             'external_id' => $externalId,
+    //             'checkout_url' => $invoice['invoice_url'],
+    //             'amount' => $transaction->total_amount,
+    //             'status' => 'pending',
+    //         ]
+    //     );
+
+    //     return response()->json([
+    //         'checkout_url' => $invoice['invoice_url'],
+    //     ]);
+    // }
+
     public function createInvoice(Request $request)
     {
         $request->validate([
@@ -1332,7 +1477,6 @@ class PaymentController extends Controller
             'use_points' => 'nullable|integer|min:0',
         ]);
 
-        // 🌟 PERLINDUNGAN ID ON NULL 🌟
         $userId = $request->user_id ?? ($request->user() ? $request->user()->id : null);
 
         if (!$userId) {
@@ -1351,7 +1495,6 @@ class PaymentController extends Controller
 
         if (! $transaction->shipping_cost || $transaction->shipping_cost == 0) {
             $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
-
             $courierCompany = $request->shipping_method === 'free' ? 'Internal' : $request->courier_company;
             $courierType = $request->shipping_method === 'free' ? 'Next Day' : $request->courier_type;
 
@@ -1381,14 +1524,29 @@ class PaymentController extends Controller
 
         foreach ($transaction->details as $detail) {
             $productName = $detail->product->name;
+
             if (!empty($detail->color)) {
-                $cleanColorString = stripslashes($detail->color);
-                $colorDecoded = json_decode($cleanColorString, true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($colorDecoded)) {
-                    $colorLabel = !empty($colorDecoded['name']) ? trim($colorDecoded['name']) : trim($colorDecoded['hex']);
-                    $productName .= ' - ' . $colorLabel;
-                } else {
-                    $productName .= ' - ' . $detail->color;
+                // Kupas lapisan terluar (struktur routing logistik baru)
+                $parsedOuter = json_decode($detail->color, true);
+                $actualColor = $detail->color;
+
+                if (json_last_error() === JSON_ERROR_NONE && is_array($parsedOuter) && array_key_exists('raw', $parsedOuter)) {
+                    $actualColor = $parsedOuter['raw']; // Ambil nilai warna aslinya
+                }
+
+                if (!empty($actualColor)) {
+                    $cleanColorString = stripslashes($actualColor);
+                    $colorDecoded = json_decode($cleanColorString, true);
+
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($colorDecoded)) {
+                        $colorLabel = !empty($colorDecoded['name']) ? trim($colorDecoded['name']) : trim($colorDecoded['hex'] ?? '');
+                        if ($colorLabel) {
+                            $productName .= ' - ' . $colorLabel;
+                        }
+                    } else {
+                        // Cukup tampilkan jika bukan JSON
+                        $productName .= ' - ' . $actualColor;
+                    }
                 }
             }
 
@@ -1462,12 +1620,12 @@ class PaymentController extends Controller
         ]);
     }
 
-public function callback(Request $request)
+    public function callback(Request $request)
     {
         return DB::transaction(function () use ($request) {
             $payment = Payment::where('external_id', $request->external_id)->lockForUpdate()->first();
 
-            if (! $payment) {
+            if (!$payment) {
                 return response()->json(['message' => 'Payment not found'], 404);
             }
 
@@ -1483,7 +1641,7 @@ public function callback(Request $request)
 
                 $paymentMethod = $request->input('payment_method', 'Unknown');
                 $paymentChannel = $request->input('payment_channel', '');
-                $fullPaymentMethod = trim($paymentMethod.' '.$paymentChannel);
+                $fullPaymentMethod = trim($paymentMethod . ' ' . $paymentChannel);
 
                 $targetTransactionStatus = ($transaction->shipping_method === 'free') ? 'completed' : 'processing';
 
@@ -1515,17 +1673,17 @@ public function callback(Request $request)
                         } else {
                             $errorMsg = $order['error'] ?? ($order['message'] ?? 'Unknown Biteship API Error');
                             $transaction->update([
-                                'tracking_number' => 'API ERR: '.substr($errorMsg, 0, 200),
+                                'tracking_number' => 'API ERR: ' . substr($errorMsg, 0, 200),
                                 'shipping_status' => 'error',
                             ]);
-                            \Log::error('Biteship Create Order Failed: '.json_encode($order));
+                            \Log::error('Biteship Create Order Failed: ' . json_encode($order));
                         }
                     } catch (\Exception $e) {
                         $transaction->update([
-                            'tracking_number' => 'SYS ERR: '.substr($e->getMessage(), 0, 200),
+                            'tracking_number' => 'SYS ERR: ' . substr($e->getMessage(), 0, 200),
                             'shipping_status' => 'error',
                         ]);
-                        \Log::error('Biteship Exception: '.$e->getMessage());
+                        \Log::error('Biteship Exception: ' . $e->getMessage());
                     }
                 } else {
                     $transaction->update([
@@ -1576,7 +1734,7 @@ public function callback(Request $request)
 
         $address = Address::find($request->address_id);
 
-        if (! $address || ! $address->postal_code) {
+        if (!$address || !$address->postal_code) {
             return response()->json([
                 'message' => 'Alamat tidak valid atau kodepos tidak ditemukan.',
             ], 400);
@@ -1593,20 +1751,21 @@ public function callback(Request $request)
                 $totalWeight += ($itemWeight * $item->quantity);
             }
 
-            if ($totalWeight <= 0) $totalWeight = 1000;
+            if ($totalWeight <= 0)
+                $totalWeight = 1000;
 
             $rates = $biteship->getRates($address, $totalWeight);
 
             if (isset($rates['success']) && $rates['success'] === false) {
                 return response()->json([
-                    'message' => 'Biteship API Error: '.($rates['error'] ?? 'Unknown error'),
+                    'message' => 'Biteship API Error: ' . ($rates['error'] ?? 'Unknown error'),
                 ], 400);
             }
 
             return response()->json($rates);
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Gagal mengambil ongkos kirim: '.$e->getMessage(),
+                'message' => 'Gagal mengambil ongkos kirim: ' . $e->getMessage(),
             ], 500);
         }
     }
