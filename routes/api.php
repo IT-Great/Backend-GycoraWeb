@@ -524,8 +524,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/admin/events/{id}', [EventController::class, 'destroy']);
 });
 
+// Route::middleware('auth:sanctum')->group(function () {
+//     Route::get('/notifications', [NotificationController::class, 'index']);
+//     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+// });
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
 });
 
