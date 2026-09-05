@@ -2,42 +2,43 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Transaction;
+use App\Models\Notification;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
-class NotificationController extends Controller {
-
+class NotificationController extends Controller
+{
     public function index(Request $request)
     {
         $user = $request->user();
-        if (!$user)
+        if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
+        }
 
-        // Auto-Sync: Memasukkan pesanan ke dalam tabel notifikasi jika belum ada
-        $transactions = DB::table('transactions')
-            ->where('user_id', $user->id)
-            ->get();
+        // Auto-Sync: Memasukkan pesanan ke dalam tabel notifikasi jika belum ada menggunakan Eloquent
+        $transactions = Transaction::where('user_id', $user->id)->get();
 
-        foreach($transactions as $trx) {
+        foreach ($transactions as $trx) {
             $statusStr = '';
-            if ($trx->status === 'completed')
+            if ($trx->status === 'completed') {
                 $statusStr = 'Telah Selesai';
-            else if ($trx->status === 'processing')
+            } elseif ($trx->status === 'processing') {
                 $statusStr = 'Sedang Diproses';
-            else
+            } else {
                 $statusStr = 'Menunggu Pembayaran';
+            }
 
             $title = 'Update Pesanan ' . $trx->order_id;
             $msg = 'Status pesanan Anda saat ini: ' . $statusStr;
 
-            $exists = DB::table('notifications')
-                ->where('user_id', $user->id)
+            // Mengecek ketersediaan notifikasi menggunakan Eloquent
+            $exists = Notification::where('user_id', $user->id)
                 ->where('title', $title)
                 ->where('message', $msg)
                 ->exists();
 
             if (!$exists) {
-                DB::table('notifications')->insert([
+                Notification::create([
                     'user_id' => $user->id,
                     'title' => $title,
                     'message' => $msg,
@@ -49,8 +50,8 @@ class NotificationController extends Controller {
             }
         }
 
-        $notifs = DB::table('notifications')
-            ->where('user_id', $user->id)
+        // Mengambil data notifikasi terbaru menggunakan Eloquent
+        $notifs = Notification::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -58,13 +59,11 @@ class NotificationController extends Controller {
             'status' => 'success',
             'data' => $notifs
         ]);
-
     }
 
     public function markAsRead(Request $request, $id)
     {
-        DB::table('notifications')
-            ->where('id', $id)
+        Notification::where('id', $id)
             ->where('user_id', $request->user()->id)
             ->update(['is_read' => true]);
 
@@ -73,11 +72,9 @@ class NotificationController extends Controller {
 
     public function markAllAsRead(Request $request)
     {
-        DB::table('notifications')
-            ->where('user_id', $request->user()->id)
+        Notification::where('user_id', $request->user()->id)
             ->update(['is_read' => true]);
 
         return response()->json(['status' => 'success']);
     }
 }
-
