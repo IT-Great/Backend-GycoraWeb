@@ -1958,7 +1958,7 @@ class ProductController extends Controller
             'content_type' => 'required|string',
         ]);
 
-        $filename = 'products/'.Str::random(40).'.'.$request->extension;
+        $filename = 'products/' . Str::random(40) . '.' . $request->extension;
 
         $uploadResponse = Storage::disk('s3')->temporaryUploadUrl(
             $filename,
@@ -1969,7 +1969,7 @@ class ProductController extends Controller
             ]
         );
 
-        $fileUrl = env('AWS_URL').'/'.$filename;
+        $fileUrl = env('AWS_URL') . '/' . $filename;
 
         return response()->json([
             'upload_url' => $uploadResponse['url'],
@@ -1990,13 +1990,11 @@ class ProductController extends Controller
             'discount_price' => 'nullable|numeric|min:0',
             'wholesale_price' => 'nullable|numeric|min:0',
             'voucher_discount_price' => 'nullable|numeric|min:0',
-
             // 👇 Validasi Bundle 👇
             'is_bundle_active' => 'boolean',
             'bundle_price' => 'nullable|numeric|min:0',
             'bundle_start_date' => 'nullable|date',
             'bundle_end_date' => 'nullable|date',
-
             // 👇 Validasi Multi Currency 👇
             'prices' => 'nullable|array',
             'prices.*' => 'nullable|numeric|min:0',
@@ -2008,12 +2006,14 @@ class ProductController extends Controller
             'voucher_discount_prices.*' => 'nullable|numeric|min:0',
             'bundle_prices' => 'nullable|array',
             'bundle_prices.*' => 'nullable|numeric|min:0',
-
             'stock' => 'required|integer|min:0',
             'image_url' => 'nullable|string',
             'variant_video' => 'nullable|string',
             'color' => 'nullable|array',
             'status' => 'required|in:active,inactive',
+            'has_bundle_freebie' => 'boolean',
+            'bundle_freebie_name' => 'nullable|string|max:255',
+            'bundle_freebie_quota' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -2041,10 +2041,14 @@ class ProductController extends Controller
             $data['bundle_start_date'] = $request->input('bundle_start_date', null);
             $data['bundle_end_date'] = $request->input('bundle_end_date', null);
 
+            $data['has_bundle_freebie'] = filter_var($request->has_bundle_freebie, FILTER_VALIDATE_BOOLEAN);
+            $data['bundle_freebie_name'] = $request->input('bundle_freebie_name', null);
+            $data['bundle_freebie_quota'] = $request->input('bundle_freebie_quota', 0);
+
             $product = Product::create($data);
 
             if ($request->stock > 0) {
-                $batchCode = 'STK-'.now()->format('YmdHis').'-'.strtoupper(Str::random(4));
+                $batchCode = 'STK-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4));
                 ProductStock::create([
                     'product_id' => $product->id,
                     'batch_code' => $batchCode,
@@ -2080,13 +2084,11 @@ class ProductController extends Controller
             'discount_price' => 'nullable|numeric|min:0',
             'wholesale_price' => 'nullable|numeric|min:0',
             'voucher_discount_price' => 'nullable|numeric|min:0',
-
             // 👇 Validasi Bundle 👇
             'is_bundle_active' => 'boolean',
             'bundle_price' => 'nullable|numeric|min:0',
             'bundle_start_date' => 'nullable|date',
             'bundle_end_date' => 'nullable|date',
-
             // Validasi Multi Currency
             'prices' => 'nullable|array',
             'prices.*' => 'nullable|numeric|min:0',
@@ -2098,11 +2100,13 @@ class ProductController extends Controller
             'voucher_discount_prices.*' => 'nullable|numeric|min:0',
             'bundle_prices' => 'nullable|array',
             'bundle_prices.*' => 'nullable|numeric|min:0',
-
             'image_url' => 'nullable|string',
             'variant_video' => 'nullable|string',
             'color' => 'nullable|array',
             'status' => 'required|in:active,inactive',
+            'has_bundle_freebie' => 'boolean',
+            'bundle_freebie_name' => 'nullable|string|max:255',
+            'bundle_freebie_quota' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -2127,9 +2131,13 @@ class ProductController extends Controller
         $data['bundle_end_date'] = $request->input('bundle_end_date', null);
 
         if ($request->has('image_url') && $request->image_url !== $product->image_url && $product->image_url) {
-            $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
+            $oldKey = str_replace(env('AWS_URL') . '/', '', $product->image_url);
             Storage::disk('s3')->delete($oldKey);
         }
+
+        $data['has_bundle_freebie'] = filter_var($request->has_bundle_freebie, FILTER_VALIDATE_BOOLEAN);
+        $data['bundle_freebie_name'] = $request->input('bundle_freebie_name', null);
+        $data['bundle_freebie_quota'] = $request->input('bundle_freebie_quota', 0);
 
         $product->update($data);
 
@@ -2170,12 +2178,12 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
 
         if ($product->image_url) {
-            $oldKey = str_replace(env('AWS_URL').'/', '', $product->image_url);
+            $oldKey = str_replace(env('AWS_URL') . '/', '', $product->image_url);
             Storage::disk('s3')->delete($oldKey);
         }
 
         try {
-            $product->delete(); // Hapus permanen
+            $product->delete();  // Hapus permanen
 
             // 👇 Hapus cache jika data dihapus permanen 👇
             Cache::forget('products_active');
@@ -2196,18 +2204,18 @@ class ProductController extends Controller
             $colorName = '';
             if (is_array($product->color) && count($product->color) > 0) {
                 $firstColor = $product->color[0];
-                if (isset($firstColor['name']) && ! empty($firstColor['name'])) {
+                if (isset($firstColor['name']) && !empty($firstColor['name'])) {
                     $colorName = trim($firstColor['name']);
                 }
             }
 
-            $baseName = $product->name; // Set default awal
+            $baseName = $product->name;  // Set default awal
 
             // 2. Logika Dinamis: Hapus "Nama Warna" dari "Nama Produk Lengkap"
-            if (! empty($colorName)) {
+            if (!empty($colorName)) {
                 // Kita gunakan Regex untuk mencari dan menghapus nama warna yang berada di PALING AKHIR teks (case-insensitive)
                 // Contoh: "Gycora Shampoo Rose Gold" dikurangi "Rose Gold" -> "Gycora Shampoo"
-                $pattern = '/'.preg_quote($colorName, '/').'$/i';
+                $pattern = '/' . preg_quote($colorName, '/') . '$/i';
                 $baseName = preg_replace($pattern, '', $product->name);
                 $baseName = trim($baseName);
 
@@ -2227,16 +2235,15 @@ class ProductController extends Controller
             // 3. Cari produk sekeluarga berdasarkan Base Name murni yang sudah didapat
             $relatedProducts = Product::where('status', 'active')
                 ->where('category_id', $product->category_id)
-                ->where('name', 'like', $baseName.'%')
+                ->where('name', 'like', $baseName . '%')
                 ->get(['id', 'name', 'slug', 'color', 'image_url']);
 
             return response()->json([
                 'status' => 'success',
                 'current_product' => $product,
-                'base_name_detected' => $baseName, // (Opsional) Mengirim base name untuk kemudahan debugging
+                'base_name_detected' => $baseName,  // (Opsional) Mengirim base name untuk kemudahan debugging
                 'variants' => $relatedProducts,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
@@ -2253,7 +2260,6 @@ class ProductController extends Controller
             $cacheKey = "product_recommendations_{$id}";
 
             $recommendations = Cache::remember($cacheKey, 86400, function () use ($id) {
-
                 // LANGKAH 1: Ambil semua transaksi yang mengandung produk yang sedang dilihat (Produk A)
                 $transactionIds = DB::table('transaction_details')
                     ->where('product_id', $id)
@@ -2263,12 +2269,12 @@ class ProductController extends Controller
                 // Algoritma akan mencari produk lain yang berada di keranjang transaksi yang sama
                 $recommendedProductIds = DB::table('transaction_details')
                     ->whereIn('transaction_id', $transactionIds)
-                    ->where('product_id', '!=', $id) // Kecualikan Produk A itu sendiri
+                    ->where('product_id', '!=', $id)  // Kecualikan Produk A itu sendiri
                     ->select('product_id', DB::raw('count(*) as total_bought_together'))
                     ->groupBy('product_id')
                     // 🌟 INTI ALGORITMA: Urutkan berdasarkan yang PALING SERING dibeli bersamaan 🌟
                     ->orderByDesc('total_bought_together')
-                    ->take(4) // Ambil Top 4 saja
+                    ->take(4)  // Ambil Top 4 saja
                     ->pluck('product_id');
 
                 // LANGKAH 3: Tarik Objek Produk Aslinya
@@ -2290,10 +2296,10 @@ class ProductController extends Controller
                     if ($product) {
                         $fallbackProducts = Product::where('category_id', $product->category_id)
                             ->where('id', '!=', $id)
-                            ->whereNotIn('id', $recommendedProductIds) // Cegah produk duplikat tampil 2x
+                            ->whereNotIn('id', $recommendedProductIds)  // Cegah produk duplikat tampil 2x
                             ->where('status', 'active')
                             ->inRandomOrder()
-                            ->take(4 - $results->count()) // Penuhi sisa slot yang kosong
+                            ->take(4 - $results->count())  // Penuhi sisa slot yang kosong
                             ->get();
 
                         $results = $results->merge($fallbackProducts);
@@ -2307,7 +2313,6 @@ class ProductController extends Controller
                 'status' => 'success',
                 'data' => $recommendations
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
@@ -2351,7 +2356,6 @@ class ProductController extends Controller
             $products->load('category');
 
             return response()->json(['status' => 'success', 'data' => $products], 200);
-
         } catch (\Exception $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }

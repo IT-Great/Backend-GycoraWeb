@@ -72,9 +72,9 @@
 namespace App\Models;
 
 use App\Traits\Auditable;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Laravel\Scout\Searchable; // 👈 1. Import Searchable Trait
 
 class Product extends Model
@@ -107,7 +107,10 @@ class Product extends Model
         'variant_images',
         'variant_video',
         'color',
-        'status'
+        'status',
+        'has_bundle_freebie',
+        'bundle_freebie_name',
+        'bundle_freebie_quota',
     ];
 
     protected $casts = [
@@ -126,6 +129,8 @@ class Product extends Model
         'stock' => 'integer',
         'variant_images' => 'array',
         'color' => 'array',
+        'has_bundle_freebie' => 'boolean',
+        'bundle_freebie_quota' => 'integer',
     ];
 
     /**

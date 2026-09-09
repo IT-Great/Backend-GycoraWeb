@@ -7740,7 +7740,8 @@ class TransactionController extends Controller
 
     public function restoreProductStock($productId, $quantityToRestore)
     {
-        if ($quantityToRestore <= 0) return;
+        if ($quantityToRestore <= 0)
+            return;
 
         // Tetap kembalikan riwayat batch stok (ProductStock) MESKIPUN produk utama sudah terhapus
         $remainingToRestore = $quantityToRestore;
@@ -7751,7 +7752,8 @@ class TransactionController extends Controller
             ->get();
 
         foreach ($incompleteBatches as $batch) {
-            if ($remainingToRestore <= 0) break;
+            if ($remainingToRestore <= 0)
+                break;
             $spaceAvailable = $batch->initial_quantity - $batch->quantity;
             if ($spaceAvailable >= $remainingToRestore) {
                 $batch->increment('quantity', $remainingToRestore);
@@ -7770,7 +7772,7 @@ class TransactionController extends Controller
             } else {
                 ProductStock::create([
                     'product_id' => $productId,
-                    'batch_code' => 'RET-'.now()->format('YmdHis').'-'.strtoupper(Str::random(4)),
+                    'batch_code' => 'RET-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4)),
                     'quantity' => $remainingToRestore,
                     'initial_quantity' => $remainingToRestore,
                 ]);
@@ -8126,7 +8128,7 @@ class TransactionController extends Controller
                 ->where('user_id', $user->id)
                 ->whereIn('id', $request->cart_ids)
                 ->get()
-                ->sortBy('product_id'); // <-- Kunci Anti-Deadlock
+                ->sortBy('product_id');  // <-- Kunci Anti-Deadlock
 
             if ($cartItems->isEmpty()) {
                 throw new \Exception('Keranjang kosong saat diproses.');
@@ -8136,20 +8138,23 @@ class TransactionController extends Controller
                 $lockedUser = User::lockForUpdate()->find($user->id);
 
                 $promoType = $request->promo_type ?? null;
-                $inputCode = ! empty($request->promo_code) ? strtoupper($request->promo_code) : null;
+                $inputCode = !empty($request->promo_code) ? strtoupper($request->promo_code) : null;
                 $appliedPromoCode = null;
                 $isClaimPromo = false;
 
                 if ($inputCode && $promoType === 'claim') {
                     $promoClaim = PromoClaim::where('email', $lockedUser->email)->where('promo_code', $inputCode)->lockForUpdate()->first();
-                    if (! $promoClaim || $promoClaim->is_used) throw new \Exception('Promo tidak valid.');
-                    if ($promoClaim->expires_at && Carbon::now()->greaterThan($promoClaim->expires_at)) throw new \Exception('Promo kedaluwarsa.');
+                    if (!$promoClaim || $promoClaim->is_used)
+                        throw new \Exception('Promo tidak valid.');
+                    if ($promoClaim->expires_at && Carbon::now()->greaterThan($promoClaim->expires_at))
+                        throw new \Exception('Promo kedaluwarsa.');
                     $appliedPromoCode = $promoClaim->promo_code;
                     $promoClaim->update(['is_used' => true, 'used_at' => now()]);
                     $isClaimPromo = true;
                 } elseif ($inputCode && $promoType === 'voucher') {
                     $voucher = PromoCode::where('code', $inputCode)->lockForUpdate()->first();
-                    if (! $voucher || ($voucher->expires_at && now()->greaterThan($voucher->expires_at)) || $voucher->times_used >= $voucher->max_uses) throw new \Exception('Voucher habis.');
+                    if (!$voucher || ($voucher->expires_at && now()->greaterThan($voucher->expires_at)) || $voucher->times_used >= $voucher->max_uses)
+                        throw new \Exception('Voucher habis.');
                     $appliedPromoCode = $voucher->code;
                     $voucher->increment('times_used');
                 }
@@ -8163,15 +8168,22 @@ class TransactionController extends Controller
                 $totalCartQty = $cartItems->sum('quantity');
                 $isWholesaleGlobal = $lockedUser->usertype === 'reseller' && $totalCartQty >= 24;
 
+                $lockedProductsByCartId = [];
+
                 foreach ($cartItems as $item) {
                     $product = Product::with('category')->lockForUpdate()->find($item->product_id);
-                    if (! $product || $product->stock < $item->quantity) throw new \Exception('Stok produk '. ($product ? $product->name : 'dihapus') .' telah habis.');
+                    $lockedProductsByCartId[$item->id] = $product;
+                    if (!$product || $product->stock < $item->quantity)
+                        throw new \Exception('Stok produk ' . ($product ? $product->name : 'dihapus') . ' telah habis.');
 
                     $normalPrice = $product->price;
-                    if ($isWholesaleGlobal && $product->wholesale_price > 0) $normalPrice = $product->wholesale_price;
-                    elseif ($product->discount_price > 0 && $product->discount_price < $product->price) $normalPrice = $product->discount_price;
+                    if ($isWholesaleGlobal && $product->wholesale_price > 0)
+                        $normalPrice = $product->wholesale_price;
+                    elseif ($product->discount_price > 0 && $product->discount_price < $product->price)
+                        $normalPrice = $product->discount_price;
 
-                    if ($promoType === 'voucher' && $product->voucher_discount_price > 0) $normalPrice = $product->voucher_discount_price;
+                    if ($promoType === 'voucher' && $product->voucher_discount_price > 0)
+                        $normalPrice = $product->voucher_discount_price;
 
                     $itemTotals[$item->id] = 0;
 
@@ -8184,31 +8196,49 @@ class TransactionController extends Controller
                     $isEGB = str_starts_with($sku, 'EGB');
                     $isBundleValid = filter_var($product->is_bundle_active, FILTER_VALIDATE_BOOLEAN) || ($product->category && $product->category->code === 'BN-01');
 
-                    if ($isBundleValid) $hasBundleProduct = true;
+                    if ($isBundleValid)
+                        $hasBundleProduct = true;
 
                     $isValidDate = true;
-                    if (! empty($product->bundle_end_date) && $product->bundle_end_date !== '0000-00-00 00:00:00') {
-                        try { $isValidDate = Carbon::parse($product->bundle_end_date)->isFuture(); } catch (\Exception $e) { $isValidDate = false; }
+                    if (!empty($product->bundle_end_date) && $product->bundle_end_date !== '0000-00-00 00:00:00') {
+                        try {
+                            $isValidDate = Carbon::parse($product->bundle_end_date)->isFuture();
+                        } catch (\Exception $e) {
+                            $isValidDate = false;
+                        }
                     }
 
                     $isDriver = $isEGB && $isBundleValid && $isValidDate && $product->bundle_price > 0;
 
                     for ($i = 0; $i < $item->quantity; $i++) {
                         $poolItem = ['cart_id' => $item->id, 'normal_price' => $normalPrice, 'bundle_price' => $product->bundle_price ?? 0];
-                        if ($isDriver) $driversPool[] = $poolItem;
-                        elseif (! $isEGB) $partnersPool[] = $poolItem;
-                        else $itemTotals[$item->id] += $normalPrice;
+                        if ($isDriver)
+                            $driversPool[] = $poolItem;
+                        elseif (!$isEGB)
+                            $partnersPool[] = $poolItem;
+                        else
+                            $itemTotals[$item->id] += $normalPrice;
                     }
                 }
 
                 if (count($driversPool) > 0 && count($partnersPool) > 0) {
-                    usort($driversPool, function ($a, $b) { return $b['bundle_price'] <=> $a['bundle_price']; });
+                    usort($driversPool, function ($a, $b) {
+                        return $b['bundle_price'] <=> $a['bundle_price'];
+                    });
                     while (count($driversPool) > 0 && count($partnersPool) > 0) {
                         $driver = array_shift($driversPool);
                         $partner = array_shift($partnersPool);
                         $discountForPair = ($driver['normal_price'] + $partner['normal_price']) - $driver['bundle_price'];
 
                         if ($discountForPair > 0) {
+                            // 👇 [FITUR BARU] POTONG KUOTA HADIAH SECARA REAL-TIME JIKA TERJADI BUNDLING 👇
+                            $driverProdModel = $lockedProductsByCartId[$driver['cart_id']];
+                            if ($driverProdModel->has_bundle_freebie && $driverProdModel->bundle_freebie_quota > 0) {
+                                // Potong kuota sebanyak 1 per pasang yang terjadi
+                                $driverProdModel->bundle_freebie_quota -= 1;
+                                $driverProdModel->save();
+                            }
+                            // 👆 ========================================================================= 👆
                             // Mengamankan presisi desimal dengan pembulatan ke bawah dan menambahkan sisa bagi
                             $halfPrice = floor($driver['bundle_price'] / 2);
                             $remainder = $driver['bundle_price'] % 2;
@@ -8222,8 +8252,10 @@ class TransactionController extends Controller
                     }
                 }
 
-                foreach ($driversPool as $driver) $itemTotals[$driver['cart_id']] += $driver['normal_price'];
-                foreach ($partnersPool as $partner) $itemTotals[$partner['cart_id']] += $partner['normal_price'];
+                foreach ($driversPool as $driver)
+                    $itemTotals[$driver['cart_id']] += $driver['normal_price'];
+                foreach ($partnersPool as $partner)
+                    $itemTotals[$partner['cart_id']] += $partner['normal_price'];
 
                 // Pastikan total keseluruhan adalah integer bulat
                 $totalAmount = (int) array_sum($itemTotals);
@@ -8231,27 +8263,30 @@ class TransactionController extends Controller
                 $promoEngine = new PromoEngineService;
                 $dynamicPromoResult = $promoEngine->calculate($totalAmount, $hasBundleProduct);
                 $merdekaDiscount = $dynamicPromoResult['discount_amount'];
-                if ($dynamicPromoResult['promo_tag']) $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode.' + '.$dynamicPromoResult['promo_tag'] : $dynamicPromoResult['promo_tag'];
+                if ($dynamicPromoResult['promo_tag'])
+                    $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode . ' + ' . $dynamicPromoResult['promo_tag'] : $dynamicPromoResult['promo_tag'];
 
                 $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
 
                 $promoDiscountAmount = 0;
                 if ($isClaimPromo) {
-                    if ($totalAmount < 50000) throw new \Exception('Minimum belanja Rp 50.000');
-                    $promoDiscountAmount = floor($totalAmount * 0.10) + min(10000, $totalShippingCost);
+                    if ($totalAmount < 50000)
+                        throw new \Exception('Minimum belanja Rp 50.000');
+                    $promoDiscountAmount = floor($totalAmount * 0.1) + min(10000, $totalShippingCost);
                 }
                 $promoDiscountAmount += $merdekaDiscount;
 
                 // Pembulatan ke bawah agar aman di-passing ke API pembayaran
                 $totalAfterPromo = (int) max(0, ($totalAmount + $totalShippingCost) - $promoDiscountAmount);
 
-                $orderId = 'SOL-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
+                $orderId = 'SOL-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
                 $earnedPoints = $lockedUser->is_membership ? floor($totalAmount / 100000) : 0;
                 $pointsUsed = 0;
 
                 if ($request->use_points > 0 && $lockedUser->is_membership) {
                     $pointsUsed = floor(min($request->use_points * 1000, $totalAfterPromo) / 1000);
-                    if ($pointsUsed > 0) $lockedUser->decrement('point', $pointsUsed);
+                    if ($pointsUsed > 0)
+                        $lockedUser->decrement('point', $pointsUsed);
                 }
 
                 $address = \App\Models\Address::find($request->address_id);
@@ -8307,7 +8342,8 @@ class TransactionController extends Controller
                     $itemRoutes = [];
 
                     foreach ($warehouses as $wh) {
-                        if ($qtyNeeded <= 0) break;
+                        if ($qtyNeeded <= 0)
+                            break;
 
                         $dummyAvailableInWh = ceil($product->stock * 0.7);
 
@@ -8335,7 +8371,10 @@ class TransactionController extends Controller
                     $product->decrement('stock', $item->quantity);
 
                     if ($product->stock <= 5) {
-                        try { Mail::to('gycora.essence@gmail.com')->queue(new LowStockAlertMail($product)); } catch (\Exception $e) {}
+                        try {
+                            Mail::to('gycora.essence@gmail.com')->queue(new LowStockAlertMail($product));
+                        } catch (\Exception $e) {
+                        }
                     }
                 }
 
@@ -8364,9 +8403,8 @@ class TransactionController extends Controller
                 'status' => 'success',
                 'checkout_url' => $invoiceData['checkout_url']
             ]), 900);
-
         } catch (\Exception $e) {
-            Log::error('Flash Sale Checkout Error: '.$e->getMessage());
+            Log::error('Flash Sale Checkout Error: ' . $e->getMessage());
             Cache::put("checkout_ticket:{$ticketId}", json_encode([
                 'status' => 'error',
                 'message' => $e->getMessage()
@@ -8389,12 +8427,12 @@ class TransactionController extends Controller
     public function cancelOrder(Request $request, $id)
     {
         $transaction = Transaction::where('user_id', $request->user()->id)->findOrFail($id);
-        if (! in_array($transaction->status, ['awaiting_payment', 'pending', 'processing', 'on_hold'])) {
+        if (!in_array($transaction->status, ['awaiting_payment', 'pending', 'processing', 'on_hold'])) {
             return response()->json(['message' => 'Cannot cancel this order.'], 400);
         }
-        if ($transaction->status === 'processing' && $transaction->shipping_method === 'biteship' && ! empty($transaction->biteship_order_id)) {
+        if ($transaction->status === 'processing' && $transaction->shipping_method === 'biteship' && !empty($transaction->biteship_order_id)) {
             try {
-                $res = Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->get('https://api.biteship.com/v1/orders/'.$transaction->biteship_order_id);
+                $res = Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->get('https://api.biteship.com/v1/orders/' . $transaction->biteship_order_id);
                 if ($res->successful()) {
                     $data = $res->json();
                     $biteshipStatus = strtolower($data['status'] ?? '');
@@ -8402,7 +8440,7 @@ class TransactionController extends Controller
                     if (in_array($biteshipStatus, $unCancellableStatuses)) {
                         return response()->json(['message' => 'Cannot cancel: The package is already being processed by the courier.'], 400);
                     }
-                    Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->delete('https://api.biteship.com/v1/orders/'.$transaction->biteship_order_id);
+                    Http::withHeaders(['Authorization' => config('services.biteship.api_key')])->delete('https://api.biteship.com/v1/orders/' . $transaction->biteship_order_id);
                 }
             } catch (\Exception $e) {
             }
@@ -8412,11 +8450,14 @@ class TransactionController extends Controller
                 if ($transaction->payment && $transaction->payment->external_id) {
                     $invoiceApi = new InvoiceApi;
                     $invoices = $invoiceApi->getInvoices(null, $transaction->payment->external_id);
-                    if (! empty($invoices) && count($invoices) > 0) {
+                    if (!empty($invoices) && count($invoices) > 0) {
                         $xenditInvoiceId = $invoices[0]['id'];
                         $refundApi = new RefundApi;
                         $refundRequest = new CreateRefund([
-                            'invoice_id' => $xenditInvoiceId, 'reason' => 'REQUESTED_BY_CUSTOMER', 'amount' => (int) $transaction->total_amount, 'metadata' => ['order_id' => $transaction->order_id],
+                            'invoice_id' => $xenditInvoiceId,
+                            'reason' => 'REQUESTED_BY_CUSTOMER',
+                            'amount' => (int) $transaction->total_amount,
+                            'metadata' => ['order_id' => $transaction->order_id],
                         ]);
                         $refundApi->createRefund(null, null, $refundRequest);
                     }
