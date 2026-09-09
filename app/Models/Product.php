@@ -75,11 +75,11 @@ use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Laravel\Scout\Searchable; // 👈 1. Import Searchable Trait
+use Laravel\Scout\Searchable;  // 👈 1. Import Searchable Trait
 
 class Product extends Model
 {
-    use Searchable; // 👈 2. Gunakan Trait ini
+    use Searchable;  // 👈 2. Gunakan Trait ini
     use HasFactory;
     use Auditable;
 
@@ -93,14 +93,16 @@ class Product extends Model
         'benefits',
         'price',
         'prices',
-        'discount_price', // Tambahkan field ini
+        'discount_price',  // Tambahkan field ini
         'discount_prices',
-        'wholesale_price', 'wholesale_prices',
-        'voucher_discount_price', 'voucher_discount_prices',
-        'is_bundle_active', // <-- BARU
-        'bundle_price',     // <-- BARU
-        'bundle_prices',    // <-- BARU
-        'bundle_start_date', // <-- BARU
+        'wholesale_price',
+        'wholesale_prices',
+        'voucher_discount_price',
+        'voucher_discount_prices',
+        'is_bundle_active',  // <-- BARU
+        'bundle_price',  // <-- BARU
+        'bundle_prices',  // <-- BARU
+        'bundle_start_date',  // <-- BARU
         'bundle_end_date',  // <-- BARU
         'stock',
         'image_url',
@@ -111,26 +113,30 @@ class Product extends Model
         'has_bundle_freebie',
         'bundle_freebie_name',
         'bundle_freebie_quota',
+        'discount_start_date',
+        'discount_end_date',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
-        'discount_price' => 'decimal:2', // Casting juga sebagai decimal
+        'discount_price' => 'decimal:2',  // Casting juga sebagai decimal
         'voucher_discount_price' => 'decimal:2',
         'prices' => 'array',
         'discount_prices' => 'array',
         'wholesale_prices' => 'array',
-        'bundle_price' => 'decimal:2', // <-- BARU
+        'bundle_price' => 'decimal:2',  // <-- BARU
         'voucher_discount_prices' => 'array',
-        'bundle_prices' => 'array', // <-- BARU
-        'is_bundle_active' => 'boolean', // <-- BARU
-        'bundle_start_date' => 'datetime', // <-- BARU
-        'bundle_end_date' => 'datetime', // <-- BARU
+        'bundle_prices' => 'array',  // <-- BARU
+        'is_bundle_active' => 'boolean',  // <-- BARU
+        'bundle_start_date' => 'datetime',  // <-- BARU
+        'bundle_end_date' => 'datetime',  // <-- BARU
         'stock' => 'integer',
         'variant_images' => 'array',
         'color' => 'array',
         'has_bundle_freebie' => 'boolean',
         'bundle_freebie_quota' => 'integer',
+        'discount_start_date' => 'datetime',
+        'discount_end_date' => 'datetime',
     ];
 
     /**
@@ -153,7 +159,8 @@ class Product extends Model
     public function getImageUrlAttribute($value)
     {
         // 1. Jika kosong sama sekali, kembalikan null
-        if (empty($value) || $value === 'null') return null;
+        if (empty($value) || $value === 'null')
+            return null;
 
         // 2. Tangani kasus terburuk: Duplikasi URL (http://ip/https://domain...)
         if (preg_match('/^(http[s]?:\/\/[^\/]+)\/(http[s]?:\/\/.*)$/', $value, $matches)) {

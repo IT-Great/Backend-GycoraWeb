@@ -2014,6 +2014,8 @@ class ProductController extends Controller
             'has_bundle_freebie' => 'boolean',
             'bundle_freebie_name' => 'nullable|string|max:255',
             'bundle_freebie_quota' => 'nullable|integer|min:0',
+            'discount_start_date' => 'nullable|date',
+            'discount_end_date' => 'nullable|date',
         ]);
 
         if ($validator->fails()) {
@@ -2044,6 +2046,8 @@ class ProductController extends Controller
             $data['has_bundle_freebie'] = filter_var($request->has_bundle_freebie, FILTER_VALIDATE_BOOLEAN);
             $data['bundle_freebie_name'] = $request->input('bundle_freebie_name', null);
             $data['bundle_freebie_quota'] = $request->input('bundle_freebie_quota', 0);
+            $data['discount_start_date'] = $request->input('discount_start_date', null);
+            $data['discount_end_date'] = $request->input('discount_end_date', null);
 
             $product = Product::create($data);
 
@@ -2107,6 +2111,8 @@ class ProductController extends Controller
             'has_bundle_freebie' => 'boolean',
             'bundle_freebie_name' => 'nullable|string|max:255',
             'bundle_freebie_quota' => 'nullable|integer|min:0',
+            'discount_start_date' => 'nullable|date',
+            'discount_end_date' => 'nullable|date',
         ]);
 
         if ($validator->fails()) {
@@ -2138,6 +2144,9 @@ class ProductController extends Controller
         $data['has_bundle_freebie'] = filter_var($request->has_bundle_freebie, FILTER_VALIDATE_BOOLEAN);
         $data['bundle_freebie_name'] = $request->input('bundle_freebie_name', null);
         $data['bundle_freebie_quota'] = $request->input('bundle_freebie_quota', 0);
+
+        $data['discount_start_date'] = $request->input('discount_start_date', null);
+        $data['discount_end_date'] = $request->input('discount_end_date', null);
 
         $product->update($data);
 
