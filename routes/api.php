@@ -550,7 +550,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('analytics/ab-test', [DashboardController::class, 'getABTestResults']);
 });
 
-Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function () {
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/admin/maintenance/status', [DashboardController::class, 'getMaintenanceStatus']);
     Route::post('/admin/maintenance/toggle', [DashboardController::class, 'toggleMaintenance']);
 });
