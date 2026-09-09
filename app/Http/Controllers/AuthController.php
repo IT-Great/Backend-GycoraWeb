@@ -977,8 +977,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Mail\ResetPasswordCodeMail;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -1042,13 +1042,13 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Email atau Password salah.'],
             ]);
         }
 
-        if (! in_array($user->usertype, ['user', 'reseller'])) {
+        if (!in_array($user->usertype, ['user', 'reseller'])) {
             throw ValidationException::withMessages([
                 'email' => ['Akses ditolak. Akun ini tidak memiliki hak akses sebagai pelanggan.'],
             ]);
@@ -1081,7 +1081,7 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
         $allowedAdminRoles = ['admin', 'superadmin', 'gudang', 'accounting', 'cs'];
 
-        if (! $user || ! Hash::check($request->password, $user->password) || ! in_array($user->usertype, $allowedAdminRoles)) {
+        if (!$user || !Hash::check($request->password, $user->password) || !in_array($user->usertype, $allowedAdminRoles)) {
             return response()->json([
                 'message' => 'Akses ditolak. Email/Password salah atau Anda tidak memiliki akses ke panel ini.',
             ], 401);
@@ -1115,9 +1115,25 @@ class AuthController extends Controller
             $googleUser = $response->json();
 
             // 🛡️ [PERBAIKAN KEAMANAN: CONFUSED DEPUTY ATTACK] 🛡️
-            if (!isset($googleUser['aud']) || $googleUser['aud'] !== env('GOOGLE_CLIENT_ID')) {
-                Log::warning('Google SSO Fraud Attempt: Token audience mismatch.');
-                return response()->json(['message' => 'Token Google tidak diotorisasi untuk aplikasi ini.'], 403);
+            // if (!isset($googleUser['aud']) || $googleUser['aud'] !== env('GOOGLE_CLIENT_ID')) {
+            //     Log::warning('Google SSO Fraud Attempt: Token audience mismatch.');
+            //     return response()->json(['message' => 'Token Google tidak diotorisasi untuk aplikasi ini.'], 403);
+            // }
+
+            // Daftar semua Google Client ID yang diizinkan (Web, Android, iOS)
+            // Menggunakan config() sebagai fallback jika env() terkena cache oleh artisan
+            $allowedClientIds = [
+                env('GOOGLE_CLIENT_ID'),
+                config('services.google.client_id'),  // Opsional jika Anda menaruhnya di config/services.php
+                // 'CLIENT_ID_UNTUK_ANDROID.apps.googleusercontent.com', (Bisa ditambahkan kelak)
+            ];
+
+            if (!isset($googleUser['aud']) || !in_array($googleUser['aud'], array_filter($allowedClientIds))) {
+                Log::warning('Google SSO Fraud Attempt: Token audience mismatch. Diterima: ' . ($googleUser['aud'] ?? 'Kosong'));
+                return response()->json([
+                    'message' => 'Token Google tidak diotorisasi untuk aplikasi ini.',
+                    'debug_aud' => config('app.debug') ? $googleUser['aud'] : null  // Membantu debugging di local
+                ], 403);
             }
 
             if (!isset($googleUser['email_verified']) || $googleUser['email_verified'] !== 'true') {
@@ -1170,23 +1186,25 @@ class AuthController extends Controller
                 'token_type' => 'Bearer',
                 'user' => $user,
             ]);
-
         } catch (\Exception $e) {
             Log::error('Google Login Error: ' . $e->getMessage());
             return response()->json(['message' => 'Terjadi kesalahan sistem saat menghubungi Google.'], 500);
         }
     }
 
-    public function getAllUsers() {
+    public function getAllUsers()
+    {
         $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
         $aiUser = User::where('email', 'ai@gycora.com')->first();
-        if ($aiUser && !in_array($aiUser->id, $adminIds)) $adminIds[] = $aiUser->id;
+        if ($aiUser && !in_array($aiUser->id, $adminIds))
+            $adminIds[] = $aiUser->id;
 
         $users = User::whereIn('usertype', ['user', 'reseller'])
             ->withCount(['messages as unread_count' => function ($query) use ($adminIds) {
                 $query->where('is_read', false)->whereIn('receiver_id', $adminIds);
             }])
-            ->latest()->get();
+            ->latest()
+            ->get();
 
         return response()->json(['data' => $users], 200);
     }
@@ -1198,7 +1216,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|max:20',
         ], [
             'email.unique' => 'Email sudah digunakan oleh akun lain',
@@ -1219,7 +1237,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,'.$admin->id,
+            'email' => 'required|string|email|max:255|unique:users,email,' . $admin->id,
             'phone' => 'nullable|string|max:20',
         ]);
 
@@ -1242,7 +1260,7 @@ class AuthController extends Controller
             'content_type' => 'required|string',
         ]);
 
-        $filename = 'profiles/'.Str::random(40).'.'.$request->extension;
+        $filename = 'profiles/' . Str::random(40) . '.' . $request->extension;
 
         $uploadResponse = Storage::disk('s3')->temporaryUploadUrl(
             $filename,
@@ -1253,7 +1271,7 @@ class AuthController extends Controller
             ]
         );
 
-        $fileUrl = env('AWS_URL').'/'.$filename;
+        $fileUrl = env('AWS_URL') . '/' . $filename;
 
         return response()->json([
             'upload_url' => $uploadResponse['url'],
@@ -1272,7 +1290,7 @@ class AuthController extends Controller
 
         try {
             if ($admin->profile_image) {
-                $oldKey = str_replace(env('AWS_URL').'/', '', $admin->profile_image);
+                $oldKey = str_replace(env('AWS_URL') . '/', '', $admin->profile_image);
                 if ($oldKey && $oldKey !== $admin->profile_image) {
                     Storage::disk('s3')->delete($oldKey);
                 }
@@ -1287,7 +1305,7 @@ class AuthController extends Controller
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Failed to update admin photo: '.$e->getMessage(),
+                'message' => 'Failed to update admin photo: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -1301,7 +1319,7 @@ class AuthController extends Controller
 
         $admin = $request->user();
 
-        if (! Hash::check($request->old_password, $admin->password)) {
+        if (!Hash::check($request->old_password, $admin->password)) {
             return response()->json([
                 'message' => 'Old password does not match',
             ], 401);
@@ -1320,12 +1338,13 @@ class AuthController extends Controller
         $user = $request->user();
         $validator = Validator::make($request->all(), [
             'first_name' => 'required|string|max:255',
-            'last_name'  => 'required|string|max:255',
-            'email'      => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'phone'      => 'nullable|string|max:20',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:20',
         ]);
 
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
+        if ($validator->fails())
+            return response()->json($validator->errors(), 422);
 
         $user->update($request->only('first_name', 'last_name', 'email', 'phone'));
 
@@ -1472,7 +1491,7 @@ class AuthController extends Controller
         }
 
         $user = User::where('email', $request->email)->first();
-        if($user) {
+        if ($user) {
             $user->password = Hash::make($request->password);
             $user->save();
         }
@@ -1526,7 +1545,8 @@ class AuthController extends Controller
         $admin = User::where('email', $request->email)
             ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
             ->first();
-        if (!$admin) return response()->json(['message' => 'Akses ditolak.'], 403);
+        if (!$admin)
+            return response()->json(['message' => 'Akses ditolak.'], 403);
 
         $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
 
@@ -1548,7 +1568,8 @@ class AuthController extends Controller
         $admin = User::where('email', $request->email)
             ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
             ->first();
-        if (!$admin) return response()->json(['message' => 'Akses ditolak.'], 403);
+        if (!$admin)
+            return response()->json(['message' => 'Akses ditolak.'], 403);
 
         $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
 
@@ -1585,9 +1606,9 @@ class AuthController extends Controller
             $result = $response->json();
 
             if (isset($result['success']) && $result['success'] == true) {
-                 if (isset($result['score']) && $result['score'] >= 0.5) {
-                     return true;
-                 }
+                if (isset($result['score']) && $result['score'] >= 0.5) {
+                    return true;
+                }
             }
         } catch (\Exception $e) {
             Log::error('reCAPTCHA ERROR KONEKSI: ' . $e->getMessage());
