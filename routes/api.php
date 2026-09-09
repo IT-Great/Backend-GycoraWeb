@@ -303,8 +303,8 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CategoryCoaController;
 use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AccessPolicyController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductStockController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\DynamicPromoController;
@@ -374,7 +374,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Profil & Users
-    Route::get('/admin/users', [AuthController::class, 'getAllUsers']); // Idealnya dibungkus middleware admin lagi
+    Route::get('/admin/users', [AuthController::class, 'getAllUsers']);  // Idealnya dibungkus middleware admin lagi
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::put('/profile', [AuthController::class, 'updateProfileInfo']);
     Route::post('/profile/image', [AuthController::class, 'updateImage']);
@@ -550,6 +550,11 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('analytics/ab-test', [DashboardController::class, 'getABTestResults']);
 });
 
+Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function () {
+    Route::get('/admin/maintenance/status', [DashboardController::class, 'getMaintenanceStatus']);
+    Route::post('/admin/maintenance/toggle', [DashboardController::class, 'toggleMaintenance']);
+});
+
 // Di dalam Grup Middleware Khusus Admin Gycora
 Route::prefix('admin/resellers')->group(function () {
     Route::get('/applications', [ResellerController::class, 'index']);
@@ -558,7 +563,6 @@ Route::prefix('admin/resellers')->group(function () {
 });
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
-
     // 1. GET: Semua staf admin (termasuk gudang, dll) butuh endpoint ini untuk merender menu sidebar
     Route::get('/access-policies', [AccessPolicyController::class, 'index']);
 
@@ -574,7 +578,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
 // EXCHANGE RATES
 // =========================================================================
 Route::get('/exchange-rates', function () {
-    if (! Cache::has('exchange_rates')) {
+    if (!Cache::has('exchange_rates')) {
         Artisan::call('currency:update-rates');
     }
 
