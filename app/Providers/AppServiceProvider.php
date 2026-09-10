@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Product;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
+use App\Observers\ProductObserver;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -32,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
 
         Model::preventLazyLoading(!app()->isProduction());
+
+        // 👇 DAFTARKAN OBSERVER DI SINI 👇
+        Product::observe(ProductObserver::class);
     }
 
        /**
