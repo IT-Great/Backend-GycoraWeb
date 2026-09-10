@@ -63,5 +63,5 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('checkout-limiter', function (Request $request) {
             return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
         });
-    }
+    }c
 }

@@ -548,6 +548,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin/dashboard')->group(function (
     Route::get('/daily-average', [DashboardController::class, 'getAverageDailyRevenue']);
     Route::get('/ai-insights', [DashboardController::class, 'getAiInsights']);
     Route::get('analytics/ab-test', [DashboardController::class, 'getABTestResults']);
+    Route::get('/finance/export', [\App\Http\Controllers\DashboardController::class, 'exportFinancialReport']);
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
