@@ -968,6 +968,669 @@
 //     }
 // }
 
+// namespace App\Http\Controllers;
+
+// use App\Models\User;
+// use Illuminate\Support\Str;
+// use Illuminate\Http\Request;
+// use Illuminate\Support\Carbon;
+// use Illuminate\Support\Facades\DB;
+// use App\Mail\ResetPasswordCodeMail;
+// use Illuminate\Support\Facades\Log;
+// use Illuminate\Support\Facades\Hash;
+// use Illuminate\Support\Facades\Http;
+// use Illuminate\Support\Facades\Mail;
+// use Illuminate\Support\Facades\Storage;
+// use Illuminate\Support\Facades\Validator;
+// use Illuminate\Validation\ValidationException;
+
+// class AuthController extends Controller
+// {
+//     public function register(Request $request)
+//     {
+//         $validated = $request->validate([
+//             'first_name' => 'required|string|max:255',
+//             'last_name' => 'required|string|max:255',
+//             'email' => 'required|string|email|max:255|unique:users',
+//             'password' => 'required|string|min:8',
+//         ]);
+
+//         $isSubscribed = false;
+
+//         try {
+//             $user = DB::transaction(function () use ($validated, &$isSubscribed) {
+//                 $subscriber = DB::table('subscribers')->where('email', $validated['email'])->first();
+
+//                 if ($subscriber) {
+//                     $isSubscribed = true;
+//                     DB::table('subscribers')->where('id', $subscriber->id)->update(['is_registered' => 1]);
+//                 }
+
+//                 return User::create([
+//                     'first_name' => $validated['first_name'],
+//                     'last_name' => $validated['last_name'],
+//                     'email' => $validated['email'],
+//                     'password' => Hash::make($validated['password']),
+//                     'usertype' => 'user',
+//                     'is_subscribed' => $isSubscribed,
+//                 ]);
+//             });
+
+//             return response()->json([
+//                 'message' => 'User berhasil didaftarkan',
+//                 'user' => $user,
+//             ], 201);
+//         } catch (\Exception $e) {
+//             Log::error('Registration Error: ' . $e->getMessage());
+//             return response()->json(['message' => 'Gagal mendaftarkan pengguna.'], 500);
+//         }
+//     }
+
+//     public function login(Request $request)
+//     {
+//         $request->validate([
+//             'email' => 'required|string|email',
+//             'password' => 'required|string',
+//             'recaptcha_token' => 'required|string'
+//         ]);
+
+//         if (!$this->verifyRecaptcha($request->recaptcha_token)) {
+//             return response()->json([
+//                 'message' => 'Verifikasi keamanan reCAPTCHA gagal. Terdeteksi sebagai aktivitas bot.'
+//             ], 403);
+//         }
+
+//         $user = User::where('email', $request->email)->first();
+
+//         if (!$user || !Hash::check($request->password, $user->password)) {
+//             throw ValidationException::withMessages([
+//                 'email' => ['Email atau Password salah.'],
+//             ]);
+//         }
+
+//         if (!in_array($user->usertype, ['user', 'reseller'])) {
+//             throw ValidationException::withMessages([
+//                 'email' => ['Akses ditolak. Akun ini tidak memiliki hak akses sebagai pelanggan.'],
+//             ]);
+//         }
+
+//         $token = $user->createToken('auth_token')->plainTextToken;
+
+//         return response()->json([
+//             'message' => 'Login Berhasil',
+//             'access_token' => $token,
+//             'token_type' => 'Bearer',
+//             'user' => $user,
+//         ]);
+//     }
+
+//     public function adminLogin(Request $request)
+//     {
+//         $request->validate([
+//             'email' => 'required|string|email',
+//             'password' => 'required|string',
+//             'recaptcha_token' => 'required|string'
+//         ]);
+
+//         if (!$this->verifyRecaptcha($request->recaptcha_token)) {
+//             return response()->json([
+//                 'message' => 'Akses diblokir. Verifikasi reCAPTCHA gagal.'
+//             ], 403);
+//         }
+
+//         $user = User::where('email', $request->email)->first();
+//         $allowedAdminRoles = ['admin', 'superadmin', 'gudang', 'accounting', 'cs'];
+
+//         if (!$user || !Hash::check($request->password, $user->password) || !in_array($user->usertype, $allowedAdminRoles)) {
+//             return response()->json([
+//                 'message' => 'Akses ditolak. Email/Password salah atau Anda tidak memiliki akses ke panel ini.',
+//             ], 401);
+//         }
+
+//         $token = $user->createToken('admin_auth_token')->plainTextToken;
+
+//         return response()->json([
+//             'message' => 'Login Berhasil',
+//             'access_token' => $token,
+//             'token_type' => 'Bearer',
+//             'user' => $user,
+//         ]);
+//     }
+
+//     public function googleLogin(Request $request)
+//     {
+//         $request->validate([
+//             'token' => 'required|string'
+//         ]);
+
+//         try {
+//             $response = Http::get('https://oauth2.googleapis.com/tokeninfo', [
+//                 'id_token' => $request->token
+//             ]);
+
+//             if (!$response->successful()) {
+//                 return response()->json(['message' => 'Sesi Google tidak valid atau telah kedaluwarsa.'], 401);
+//             }
+
+//             $googleUser = $response->json();
+
+//             // 🛡️ [PERBAIKAN KEAMANAN: CONFUSED DEPUTY ATTACK] 🛡️
+//             // if (!isset($googleUser['aud']) || $googleUser['aud'] !== env('GOOGLE_CLIENT_ID')) {
+//             //     Log::warning('Google SSO Fraud Attempt: Token audience mismatch.');
+//             //     return response()->json(['message' => 'Token Google tidak diotorisasi untuk aplikasi ini.'], 403);
+//             // }
+
+//             // Daftar semua Google Client ID yang diizinkan (Web, Android, iOS)
+//             // Menggunakan config() sebagai fallback jika env() terkena cache oleh artisan
+//             $allowedClientIds = [
+//                 env('GOOGLE_CLIENT_ID'),
+//                 config('services.google.client_id'),  // Opsional jika Anda menaruhnya di config/services.php
+//                 // 'CLIENT_ID_UNTUK_ANDROID.apps.googleusercontent.com', (Bisa ditambahkan kelak)
+//             ];
+
+//             if (!isset($googleUser['aud']) || !in_array($googleUser['aud'], array_filter($allowedClientIds))) {
+//                 Log::warning('Google SSO Fraud Attempt: Token audience mismatch. Diterima: ' . ($googleUser['aud'] ?? 'Kosong'));
+//                 return response()->json([
+//                     'message' => 'Token Google tidak diotorisasi untuk aplikasi ini.',
+//                     'debug_aud' => config('app.debug') ? $googleUser['aud'] : null  // Membantu debugging di local
+//                 ], 403);
+//             }
+
+//             if (!isset($googleUser['email_verified']) || $googleUser['email_verified'] !== 'true') {
+//                 return response()->json(['message' => 'Email Google belum diverifikasi.'], 401);
+//             }
+
+//             $email = $googleUser['email'];
+//             $firstName = $googleUser['given_name'] ?? 'Google';
+//             $lastName = $googleUser['family_name'] ?? 'User';
+//             $picture = $googleUser['picture'] ?? null;
+
+//             $user = DB::transaction(function () use ($email, $firstName, $lastName, $picture) {
+//                 $user = User::where('email', $email)->first();
+
+//                 if (!$user) {
+//                     // 🛡️ [PERBAIKAN LOGIKA: Cek Subscriber] 🛡️
+//                     $subscriber = DB::table('subscribers')->where('email', $email)->first();
+//                     $isSubscribed = false;
+
+//                     if ($subscriber) {
+//                         $isSubscribed = true;
+//                         DB::table('subscribers')->where('id', $subscriber->id)->update(['is_registered' => 1]);
+//                     }
+
+//                     $user = User::create([
+//                         'first_name' => $firstName,
+//                         'last_name' => $lastName,
+//                         'email' => $email,
+//                         'password' => Hash::make(Str::random(32)),
+//                         'usertype' => 'user',
+//                         'profile_image' => $picture,
+//                         'is_subscribed' => $isSubscribed,
+//                     ]);
+//                 } elseif (!$user->profile_image && $picture) {
+//                     $user->update(['profile_image' => $picture]);
+//                 }
+
+//                 return $user;
+//             });
+
+//             if (!in_array($user->usertype, ['user', 'reseller'])) {
+//                 return response()->json(['message' => 'Akun ini tidak memiliki akses ke portal pelanggan.'], 403);
+//             }
+
+//             $token = $user->createToken('auth_token')->plainTextToken;
+
+//             return response()->json([
+//                 'message' => 'Login Google Berhasil',
+//                 'access_token' => $token,
+//                 'token_type' => 'Bearer',
+//                 'user' => $user,
+//             ]);
+//         } catch (\Exception $e) {
+//             Log::error('Google Login Error: ' . $e->getMessage());
+//             return response()->json(['message' => 'Terjadi kesalahan sistem saat menghubungi Google.'], 500);
+//         }
+//     }
+
+//     public function getAllUsers()
+//     {
+//         $adminIds = User::whereIn('usertype', ['admin', 'superadmin', 'cs'])->pluck('id')->toArray();
+//         $aiUser = User::where('email', 'ai@gycora.com')->first();
+//         if ($aiUser && !in_array($aiUser->id, $adminIds))
+//             $adminIds[] = $aiUser->id;
+
+//         $users = User::whereIn('usertype', ['user', 'reseller'])
+//             ->withCount(['messages as unread_count' => function ($query) use ($adminIds) {
+//                 $query->where('is_read', false)->whereIn('receiver_id', $adminIds);
+//             }])
+//             ->latest()
+//             ->get();
+
+//         return response()->json(['data' => $users], 200);
+//     }
+
+//     public function updateProfile(Request $request)
+//     {
+//         $user = $request->user();
+
+//         $validated = $request->validate([
+//             'first_name' => 'required|string|max:255',
+//             'last_name' => 'required|string|max:255',
+//             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+//             'phone' => 'nullable|string|max:20',
+//         ], [
+//             'email.unique' => 'Email sudah digunakan oleh akun lain',
+//         ]);
+
+//         $user->update($validated);
+
+//         return response()->json([
+//             'message' => 'Profil berhasil diperbarui',
+//             'user' => $user,
+//         ]);
+//     }
+
+//     public function updateAdminProfileInfo(Request $request)
+//     {
+//         $admin = $request->user();
+
+//         $validator = Validator::make($request->all(), [
+//             'first_name' => 'required|string|max:255',
+//             'last_name' => 'required|string|max:255',
+//             'email' => 'required|string|email|max:255|unique:users,email,' . $admin->id,
+//             'phone' => 'nullable|string|max:20',
+//         ]);
+
+//         if ($validator->fails()) {
+//             return response()->json($validator->errors(), 422);
+//         }
+
+//         $admin->update($request->only('first_name', 'last_name', 'email', 'phone'));
+
+//         return response()->json([
+//             'message' => 'Admin profile updated successfully',
+//             'admin' => $admin,
+//         ]);
+//     }
+
+//     public function getProfilePresignedUrl(Request $request)
+//     {
+//         $request->validate([
+//             'extension' => 'required|string',
+//             'content_type' => 'required|string',
+//         ]);
+
+//         $filename = 'profiles/' . Str::random(40) . '.' . $request->extension;
+
+//         $uploadResponse = Storage::disk('s3')->temporaryUploadUrl(
+//             $filename,
+//             now()->addMinutes(15),
+//             [
+//                 'ContentType' => $request->content_type,
+//                 'ACL' => 'public-read',
+//             ]
+//         );
+
+//         $fileUrl = env('AWS_URL') . '/' . $filename;
+
+//         return response()->json([
+//             'upload_url' => $uploadResponse['url'],
+//             'upload_headers' => $uploadResponse['headers'],
+//             'file_url' => $fileUrl,
+//         ]);
+//     }
+
+//     public function updateAdminImage(Request $request)
+//     {
+//         $request->validate([
+//             'image_url' => 'required|url',
+//         ]);
+
+//         $admin = $request->user();
+
+//         try {
+//             if ($admin->profile_image) {
+//                 $oldKey = str_replace(env('AWS_URL') . '/', '', $admin->profile_image);
+//                 if ($oldKey && $oldKey !== $admin->profile_image) {
+//                     Storage::disk('s3')->delete($oldKey);
+//                 }
+//             }
+
+//             $admin->profile_image = $request->image_url;
+//             $admin->save();
+
+//             return response()->json([
+//                 'message' => 'Admin photo updated',
+//                 'admin' => $admin->fresh(),
+//             ]);
+//         } catch (\Exception $e) {
+//             return response()->json([
+//                 'message' => 'Failed to update admin photo: ' . $e->getMessage(),
+//             ], 500);
+//         }
+//     }
+
+//     public function updateAdminPassword(Request $request)
+//     {
+//         $request->validate([
+//             'old_password' => 'required',
+//             'password' => 'required|string|min:8|confirmed',
+//         ]);
+
+//         $admin = $request->user();
+
+//         if (!Hash::check($request->old_password, $admin->password)) {
+//             return response()->json([
+//                 'message' => 'Old password does not match',
+//             ], 401);
+//         }
+
+//         $admin->password = Hash::make($request->password);
+//         $admin->save();
+
+//         return response()->json([
+//             'message' => 'Password updated successfully',
+//         ]);
+//     }
+
+//     public function updateProfileInfo(Request $request)
+//     {
+//         $user = $request->user();
+//         $validator = Validator::make($request->all(), [
+//             'first_name' => 'required|string|max:255',
+//             'last_name' => 'required|string|max:255',
+//             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+//             'phone' => 'nullable|string|max:20',
+//         ]);
+
+//         if ($validator->fails())
+//             return response()->json($validator->errors(), 422);
+
+//         $user->update($request->only('first_name', 'last_name', 'email', 'phone'));
+
+//         return response()->json(['message' => 'Info profil diperbarui', 'user' => $user]);
+//     }
+
+//     public function updateImage(Request $request)
+//     {
+//         Log::info('Update profile image started', [
+//             'user_id' => $request->user()->id
+//         ]);
+
+//         $request->validate([
+//             'image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
+//         ]);
+
+//         $user = $request->user();
+
+//         try {
+//             if ($user->profile_image && str_contains($user->profile_image, '/storage/')) {
+//                 $oldPath = explode('/storage/', $user->profile_image)[1] ?? null;
+//                 // 🛡️ [PERBAIKAN KEAMANAN: Path Traversal] 🛡️
+//                 if ($oldPath && !str_contains($oldPath, '..')) {
+//                     Storage::disk('public')->delete($oldPath);
+//                 }
+//             }
+
+//             $path = $request->file('image')->store('profiles', 'public');
+
+//             $user->profile_image = asset('storage/' . $path);
+//             $user->save();
+
+//             return response()->json([
+//                 'message' => 'Foto profil diperbarui',
+//                 'user' => $user->fresh()
+//             ]);
+//         } catch (\Exception $e) {
+//             Log::error('Failed to update profile image', [
+//                 'error_message' => $e->getMessage()
+//             ]);
+//             return response()->json(['message' => 'Gagal memperbarui foto profil'], 500);
+//         }
+//     }
+
+//     public function updatePassword(Request $request)
+//     {
+//         $request->validate([
+//             'old_password' => 'required',
+//             'password' => 'required|string|min:8|confirmed',
+//         ]);
+
+//         $user = $request->user();
+
+//         if (!Hash::check($request->old_password, $user->password)) {
+//             return response()->json(['message' => 'Password lama tidak sesuai'], 401);
+//         }
+
+//         $user->password = Hash::make($request->password);
+//         $user->save();
+
+//         return response()->json(['message' => 'Password berhasil diubah']);
+//     }
+
+//     public function getUserDetail($id)
+//     {
+//         $user = User::with('addresses')->findOrFail($id);
+//         return response()->json($user, 200);
+//     }
+
+//     public function toggleMembership(Request $request)
+//     {
+//         $user = $request->user();
+//         $request->validate([
+//             'is_membership' => 'required|boolean'
+//         ]);
+
+//         $user->update([
+//             'is_membership' => $request->is_membership
+//         ]);
+
+//         return response()->json(['user' => $user, 'message' => 'Membership status updated!']);
+//     }
+
+//     public function sendResetCode(Request $request)
+//     {
+//         $request->validate(['email' => 'required|email']);
+
+//         $user = User::where('email', $request->email)->first();
+
+//         // Sama seperti admin, jangan membedakan respons demi keamanan
+//         if (!$user) {
+//             return response()->json(['message' => 'Jika email terdaftar, kode verifikasi telah dikirim.']);
+//         }
+
+//         DB::table('password_reset_codes')->where('email', $request->email)->delete();
+
+//         // 🛡️ [PERBAIKAN KEAMANAN: Cryptographically Secure OTP] 🛡️
+//         $code = (string) random_int(100000, 999999);
+
+//         DB::table('password_reset_codes')->insert([
+//             'email' => $request->email,
+//             'code' => Hash::make($code),
+//             'expires_at' => Carbon::now()->addMinutes(15),
+//             'created_at' => Carbon::now()
+//         ]);
+
+//         try {
+//             Mail::to($request->email)->send(new ResetPasswordCodeMail($code));
+//             return response()->json(['message' => 'Jika email terdaftar, kode verifikasi telah dikirim.']);
+//         } catch (\Exception $e) {
+//             Log::error('Failed to send reset code: ' . $e->getMessage());
+//             return response()->json(['message' => 'Gagal mengirim email. Silakan coba lagi nanti.'], 500);
+//         }
+//     }
+
+//     public function verifyResetCode(Request $request)
+//     {
+//         $request->validate([
+//             'email' => 'required|email',
+//             'code' => 'required|digits:6'
+//         ]);
+
+//         $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
+
+//         if (!$resetData || Carbon::now()->greaterThan($resetData->expires_at) || !Hash::check($request->code, $resetData->code)) {
+//             return response()->json(['message' => 'Kode verifikasi salah atau kedaluwarsa.'], 400);
+//         }
+
+//         return response()->json(['message' => 'Code verified successfully.']);
+//     }
+
+//     public function resetPassword(Request $request)
+//     {
+//         $request->validate([
+//             'email' => 'required|email',
+//             'code' => 'required|digits:6',
+//             'password' => 'required|string|min:8|confirmed'
+//         ]);
+
+//         $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
+
+//         if (!$resetData || !Hash::check($request->code, $resetData->code) || Carbon::now()->greaterThan($resetData->expires_at)) {
+//             return response()->json(['message' => 'Sesi tidak valid atau kode kedaluwarsa.'], 400);
+//         }
+
+//         $user = User::where('email', $request->email)->first();
+//         if ($user) {
+//             $user->password = Hash::make($request->password);
+//             $user->save();
+//         }
+
+//         DB::table('password_reset_codes')->where('email', $request->email)->delete();
+
+//         return response()->json(['message' => 'Password has been successfully reset.']);
+//     }
+
+//     public function adminSendResetCode(Request $request)
+//     {
+//         $request->validate(['email' => 'required|email']);
+
+//         $admin = User::where('email', $request->email)
+//             ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
+//             ->first();
+
+//         // 🛡️ [PERBAIKAN KEAMANAN: USER ENUMERATION] 🛡️
+//         // Selalu berikan respons 200 terlepas email ada atau tidak
+//         if (!$admin) {
+//             return response()->json(['message' => 'Jika alamat email valid dan terdaftar sebagai staf, kode akan dikirim.']);
+//         }
+
+//         DB::table('password_reset_codes')->where('email', $request->email)->delete();
+
+//         $code = (string) random_int(100000, 999999);
+
+//         DB::table('password_reset_codes')->insert([
+//             'email' => $request->email,
+//             'code' => Hash::make($code),
+//             'expires_at' => Carbon::now()->addMinutes(15),
+//             'created_at' => Carbon::now()
+//         ]);
+
+//         try {
+//             Mail::to($request->email)->send(new \App\Mail\ResetPasswordCodeMail($code));
+//             return response()->json(['message' => 'Jika alamat email valid dan terdaftar sebagai staf, kode akan dikirim.']);
+//         } catch (\Exception $e) {
+//             Log::error('Failed to send admin reset code: ' . $e->getMessage());
+//             return response()->json(['message' => 'Gagal mengirim email. Silakan coba lagi nanti.'], 500);
+//         }
+//     }
+
+//     public function adminVerifyResetCode(Request $request)
+//     {
+//         $request->validate([
+//             'email' => 'required|email',
+//             'code' => 'required|digits:6'
+//         ]);
+
+//         $admin = User::where('email', $request->email)
+//             ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
+//             ->first();
+//         if (!$admin)
+//             return response()->json(['message' => 'Akses ditolak.'], 403);
+
+//         $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
+
+//         if (!$resetData || Carbon::now()->greaterThan($resetData->expires_at) || !Hash::check($request->code, $resetData->code)) {
+//             return response()->json(['message' => 'Kode verifikasi tidak valid atau telah kedaluwarsa.'], 400);
+//         }
+
+//         return response()->json(['message' => 'Kode berhasil diverifikasi.']);
+//     }
+
+//     public function adminResetPassword(Request $request)
+//     {
+//         $request->validate([
+//             'email' => 'required|email',
+//             'code' => 'required|digits:6',
+//             'password' => 'required|string|min:8|confirmed'
+//         ]);
+
+//         $admin = User::where('email', $request->email)
+//             ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
+//             ->first();
+//         if (!$admin)
+//             return response()->json(['message' => 'Akses ditolak.'], 403);
+
+//         $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
+
+//         if (!$resetData || !Hash::check($request->code, $resetData->code) || Carbon::now()->greaterThan($resetData->expires_at)) {
+//             return response()->json(['message' => 'Sesi tidak valid atau kode kedaluwarsa.'], 400);
+//         }
+
+//         $admin->password = Hash::make($request->password);
+//         $admin->save();
+
+//         DB::table('password_reset_codes')->where('email', $request->email)->delete();
+
+//         return response()->json(['message' => 'Kata sandi berhasil disetel ulang.']);
+//     }
+
+//     private function verifyRecaptcha($token)
+//     {
+//         if (app()->environment('testing')) {
+//             return true;
+//         }
+
+//         if (!$token) {
+//             return false;
+//         }
+
+//         $secretKey = env('RECAPTCHA_SECRET_KEY');
+
+//         try {
+//             $response = \Illuminate\Support\Facades\Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+//                 'secret' => $secretKey,
+//                 'response' => $token,
+//             ]);
+
+//             $result = $response->json();
+
+//             if (isset($result['success']) && $result['success'] == true) {
+//                 if (isset($result['score']) && $result['score'] >= 0.5) {
+//                     return true;
+//                 }
+//             }
+//         } catch (\Exception $e) {
+//             Log::error('reCAPTCHA ERROR KONEKSI: ' . $e->getMessage());
+//         }
+
+//         return false;
+//     }
+
+//     public function refreshToken(Request $request)
+//     {
+//         $user = $request->user();
+//         $user->currentAccessToken()->delete();
+//         $newToken = $user->createToken('auth_token')->plainTextToken;
+
+//         return response()->json([
+//             'message' => 'Token berhasil diperbarui secara silent',
+//             'access_token' => $newToken,
+//             'user' => $user
+//         ], 200);
+//     }
+// }
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
@@ -999,7 +1662,8 @@ class AuthController extends Controller
 
         try {
             $user = DB::transaction(function () use ($validated, &$isSubscribed) {
-                $subscriber = DB::table('subscribers')->where('email', $validated['email'])->first();
+                // Kunci tabel subscriber untuk mencegah race condition status langganan
+                $subscriber = DB::table('subscribers')->where('email', $validated['email'])->lockForUpdate()->first();
 
                 if ($subscriber) {
                     $isSubscribed = true;
@@ -1020,6 +1684,13 @@ class AuthController extends Controller
                 'message' => 'User berhasil didaftarkan',
                 'user' => $user,
             ], 201);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // 🛡️ Menangkap Race Condition jika user spam tombol Daftar
+            if ($e->getCode() == '23000') {
+                return response()->json(['message' => 'Email ini sudah terdaftar. Silakan login.'], 422);
+            }
+            Log::error('Registration Error: ' . $e->getMessage());
+            return response()->json(['message' => 'Gagal mendaftarkan pengguna.'], 500);
         } catch (\Exception $e) {
             Log::error('Registration Error: ' . $e->getMessage());
             return response()->json(['message' => 'Gagal mendaftarkan pengguna.'], 500);
@@ -1114,25 +1785,16 @@ class AuthController extends Controller
 
             $googleUser = $response->json();
 
-            // 🛡️ [PERBAIKAN KEAMANAN: CONFUSED DEPUTY ATTACK] 🛡️
-            // if (!isset($googleUser['aud']) || $googleUser['aud'] !== env('GOOGLE_CLIENT_ID')) {
-            //     Log::warning('Google SSO Fraud Attempt: Token audience mismatch.');
-            //     return response()->json(['message' => 'Token Google tidak diotorisasi untuk aplikasi ini.'], 403);
-            // }
-
-            // Daftar semua Google Client ID yang diizinkan (Web, Android, iOS)
-            // Menggunakan config() sebagai fallback jika env() terkena cache oleh artisan
             $allowedClientIds = [
                 env('GOOGLE_CLIENT_ID'),
-                config('services.google.client_id'),  // Opsional jika Anda menaruhnya di config/services.php
-                // 'CLIENT_ID_UNTUK_ANDROID.apps.googleusercontent.com', (Bisa ditambahkan kelak)
+                config('services.google.client_id'),
             ];
 
             if (!isset($googleUser['aud']) || !in_array($googleUser['aud'], array_filter($allowedClientIds))) {
                 Log::warning('Google SSO Fraud Attempt: Token audience mismatch. Diterima: ' . ($googleUser['aud'] ?? 'Kosong'));
                 return response()->json([
                     'message' => 'Token Google tidak diotorisasi untuk aplikasi ini.',
-                    'debug_aud' => config('app.debug') ? $googleUser['aud'] : null  // Membantu debugging di local
+                    'debug_aud' => config('app.debug') ? $googleUser['aud'] : null 
                 ], 403);
             }
 
@@ -1145,28 +1807,37 @@ class AuthController extends Controller
             $lastName = $googleUser['family_name'] ?? 'User';
             $picture = $googleUser['picture'] ?? null;
 
+            // 🛡️ [PERBAIKAN FATAL 2] Mencegah Insert Race Condition pada SSO
             $user = DB::transaction(function () use ($email, $firstName, $lastName, $picture) {
                 $user = User::where('email', $email)->first();
 
                 if (!$user) {
-                    // 🛡️ [PERBAIKAN LOGIKA: Cek Subscriber] 🛡️
-                    $subscriber = DB::table('subscribers')->where('email', $email)->first();
-                    $isSubscribed = false;
+                    try {
+                        $subscriber = DB::table('subscribers')->where('email', $email)->lockForUpdate()->first();
+                        $isSubscribed = false;
 
-                    if ($subscriber) {
-                        $isSubscribed = true;
-                        DB::table('subscribers')->where('id', $subscriber->id)->update(['is_registered' => 1]);
+                        if ($subscriber) {
+                            $isSubscribed = true;
+                            DB::table('subscribers')->where('id', $subscriber->id)->update(['is_registered' => 1]);
+                        }
+
+                        $user = User::create([
+                            'first_name' => $firstName,
+                            'last_name' => $lastName,
+                            'email' => $email,
+                            'password' => Hash::make(Str::random(32)),
+                            'usertype' => 'user',
+                            'profile_image' => $picture,
+                            'is_subscribed' => $isSubscribed,
+                        ]);
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        // Jika meledak karena 2x klik cepat (Duplicate Entry), ambil data user yang berhasil disimpan oleh request pertama
+                        if ($e->getCode() == '23000') {
+                            $user = User::where('email', $email)->first();
+                        } else {
+                            throw $e;
+                        }
                     }
-
-                    $user = User::create([
-                        'first_name' => $firstName,
-                        'last_name' => $lastName,
-                        'email' => $email,
-                        'password' => Hash::make(Str::random(32)),
-                        'usertype' => 'user',
-                        'profile_image' => $picture,
-                        'is_subscribed' => $isSubscribed,
-                    ]);
                 } elseif (!$user->profile_image && $picture) {
                     $user->update(['profile_image' => $picture]);
                 }
@@ -1289,7 +1960,7 @@ class AuthController extends Controller
         $admin = $request->user();
 
         try {
-            if ($admin->profile_image) {
+            if ($admin->profile_image && str_contains($admin->profile_image, env('AWS_URL'))) {
                 $oldKey = str_replace(env('AWS_URL') . '/', '', $admin->profile_image);
                 if ($oldKey && $oldKey !== $admin->profile_image) {
                     Storage::disk('s3')->delete($oldKey);
@@ -1366,7 +2037,7 @@ class AuthController extends Controller
         try {
             if ($user->profile_image && str_contains($user->profile_image, '/storage/')) {
                 $oldPath = explode('/storage/', $user->profile_image)[1] ?? null;
-                // 🛡️ [PERBAIKAN KEAMANAN: Path Traversal] 🛡️
+                // 🛡️ Mencegah serangan Path Traversal
                 if ($oldPath && !str_contains($oldPath, '..')) {
                     Storage::disk('public')->delete($oldPath);
                 }
@@ -1434,30 +2105,27 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        // Sama seperti admin, jangan membedakan respons demi keamanan
         if (!$user) {
             return response()->json(['message' => 'Jika email terdaftar, kode verifikasi telah dikirim.']);
         }
 
-        DB::table('password_reset_codes')->where('email', $request->email)->delete();
+        // 🛡️ [PERBAIKAN FATAL 3] Menggunakan DB Transaction untuk cegah Data Race
+        DB::transaction(function () use ($request) {
+            DB::table('password_reset_codes')->where('email', $request->email)->delete();
 
-        // 🛡️ [PERBAIKAN KEAMANAN: Cryptographically Secure OTP] 🛡️
-        $code = (string) random_int(100000, 999999);
+            $code = (string) random_int(100000, 999999);
 
-        DB::table('password_reset_codes')->insert([
-            'email' => $request->email,
-            'code' => Hash::make($code),
-            'expires_at' => Carbon::now()->addMinutes(15),
-            'created_at' => Carbon::now()
-        ]);
+            DB::table('password_reset_codes')->insert([
+                'email' => $request->email,
+                'code' => Hash::make($code),
+                'expires_at' => Carbon::now()->addMinutes(15),
+                'created_at' => Carbon::now()
+            ]);
 
-        try {
             Mail::to($request->email)->send(new ResetPasswordCodeMail($code));
-            return response()->json(['message' => 'Jika email terdaftar, kode verifikasi telah dikirim.']);
-        } catch (\Exception $e) {
-            Log::error('Failed to send reset code: ' . $e->getMessage());
-            return response()->json(['message' => 'Gagal mengirim email. Silakan coba lagi nanti.'], 500);
-        }
+        });
+
+        return response()->json(['message' => 'Jika email terdaftar, kode verifikasi telah dikirim.']);
     }
 
     public function verifyResetCode(Request $request)
@@ -1484,19 +2152,21 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed'
         ]);
 
-        $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
+        DB::transaction(function () use ($request) {
+            $resetData = DB::table('password_reset_codes')->where('email', $request->email)->lockForUpdate()->first();
 
-        if (!$resetData || !Hash::check($request->code, $resetData->code) || Carbon::now()->greaterThan($resetData->expires_at)) {
-            return response()->json(['message' => 'Sesi tidak valid atau kode kedaluwarsa.'], 400);
-        }
+            if (!$resetData || !Hash::check($request->code, $resetData->code) || Carbon::now()->greaterThan($resetData->expires_at)) {
+                throw new \Exception('Sesi tidak valid atau kode kedaluwarsa.');
+            }
 
-        $user = User::where('email', $request->email)->first();
-        if ($user) {
-            $user->password = Hash::make($request->password);
-            $user->save();
-        }
+            $user = User::where('email', $request->email)->first();
+            if ($user) {
+                $user->password = Hash::make($request->password);
+                $user->save();
+            }
 
-        DB::table('password_reset_codes')->where('email', $request->email)->delete();
+            DB::table('password_reset_codes')->where('email', $request->email)->delete();
+        });
 
         return response()->json(['message' => 'Password has been successfully reset.']);
     }
@@ -1509,30 +2179,26 @@ class AuthController extends Controller
             ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
             ->first();
 
-        // 🛡️ [PERBAIKAN KEAMANAN: USER ENUMERATION] 🛡️
-        // Selalu berikan respons 200 terlepas email ada atau tidak
         if (!$admin) {
             return response()->json(['message' => 'Jika alamat email valid dan terdaftar sebagai staf, kode akan dikirim.']);
         }
 
-        DB::table('password_reset_codes')->where('email', $request->email)->delete();
+        DB::transaction(function () use ($request) {
+            DB::table('password_reset_codes')->where('email', $request->email)->delete();
 
-        $code = (string) random_int(100000, 999999);
+            $code = (string) random_int(100000, 999999);
 
-        DB::table('password_reset_codes')->insert([
-            'email' => $request->email,
-            'code' => Hash::make($code),
-            'expires_at' => Carbon::now()->addMinutes(15),
-            'created_at' => Carbon::now()
-        ]);
+            DB::table('password_reset_codes')->insert([
+                'email' => $request->email,
+                'code' => Hash::make($code),
+                'expires_at' => Carbon::now()->addMinutes(15),
+                'created_at' => Carbon::now()
+            ]);
 
-        try {
             Mail::to($request->email)->send(new \App\Mail\ResetPasswordCodeMail($code));
-            return response()->json(['message' => 'Jika alamat email valid dan terdaftar sebagai staf, kode akan dikirim.']);
-        } catch (\Exception $e) {
-            Log::error('Failed to send admin reset code: ' . $e->getMessage());
-            return response()->json(['message' => 'Gagal mengirim email. Silakan coba lagi nanti.'], 500);
-        }
+        });
+
+        return response()->json(['message' => 'Jika alamat email valid dan terdaftar sebagai staf, kode akan dikirim.']);
     }
 
     public function adminVerifyResetCode(Request $request)
@@ -1565,22 +2231,26 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed'
         ]);
 
-        $admin = User::where('email', $request->email)
-            ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
-            ->first();
-        if (!$admin)
-            return response()->json(['message' => 'Akses ditolak.'], 403);
+        DB::transaction(function () use ($request) {
+            $admin = User::where('email', $request->email)
+                ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
+                ->first();
+            
+            if (!$admin) {
+                throw new \Exception('Akses ditolak.');
+            }
 
-        $resetData = DB::table('password_reset_codes')->where('email', $request->email)->first();
+            $resetData = DB::table('password_reset_codes')->where('email', $request->email)->lockForUpdate()->first();
 
-        if (!$resetData || !Hash::check($request->code, $resetData->code) || Carbon::now()->greaterThan($resetData->expires_at)) {
-            return response()->json(['message' => 'Sesi tidak valid atau kode kedaluwarsa.'], 400);
-        }
+            if (!$resetData || !Hash::check($request->code, $resetData->code) || Carbon::now()->greaterThan($resetData->expires_at)) {
+                throw new \Exception('Sesi tidak valid atau kode kedaluwarsa.');
+            }
 
-        $admin->password = Hash::make($request->password);
-        $admin->save();
+            $admin->password = Hash::make($request->password);
+            $admin->save();
 
-        DB::table('password_reset_codes')->where('email', $request->email)->delete();
+            DB::table('password_reset_codes')->where('email', $request->email)->delete();
+        });
 
         return response()->json(['message' => 'Kata sandi berhasil disetel ulang.']);
     }
@@ -1619,8 +2289,21 @@ class AuthController extends Controller
 
     public function refreshToken(Request $request)
     {
+        // 🛡️ [PERBAIKAN FATAL 1] Mencegah Server Crash jika token sudah mati dari sisi Laravel
         $user = $request->user();
-        $user->currentAccessToken()->delete();
+        
+        if (!$user) {
+            // Jika masuk ke sini, artinya token sudah benar-benar mati dan ditolak Sanctum.
+            return response()->json([
+                'message' => 'Sesi tidak dapat dipulihkan secara otomatis. Silakan login ulang.'
+            ], 401);
+        }
+
+        // Hapus HANYA jika token masih dikenali oleh sistem, mencegah null-pointer exception
+        if ($user->currentAccessToken()) {
+            $user->currentAccessToken()->delete();
+        }
+        
         $newToken = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
