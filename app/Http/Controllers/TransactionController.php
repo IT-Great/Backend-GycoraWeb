@@ -9236,12 +9236,67 @@ class TransactionController extends Controller
         return $angle * $earthRadius;
     }
 
+    // public function restoreProductStock($productId, $quantityToRestore)
+    // {
+    //     if ($quantityToRestore <= 0)
+    //         return;
+
+    //     // Tetap kembalikan riwayat batch stok (ProductStock) MESKIPUN produk utama sudah terhapus
+    //     $remainingToRestore = $quantityToRestore;
+    //     $incompleteBatches = ProductStock::where('product_id', $productId)
+    //         ->whereColumn('quantity', '<', 'initial_quantity')
+    //         ->orderBy('created_at', 'asc')
+    //         ->lockForUpdate()
+    //         ->get();
+
+    //     foreach ($incompleteBatches as $batch) {
+    //         if ($remainingToRestore <= 0)
+    //             break;
+    //         $spaceAvailable = $batch->initial_quantity - $batch->quantity;
+    //         if ($spaceAvailable >= $remainingToRestore) {
+    //             $batch->increment('quantity', $remainingToRestore);
+    //             $remainingToRestore = 0;
+    //         } else {
+    //             $batch->increment('quantity', $spaceAvailable);
+    //             $remainingToRestore -= $spaceAvailable;
+    //         }
+    //     }
+
+    //     if ($remainingToRestore > 0) {
+    //         $latestBatch = ProductStock::where('product_id', $productId)->orderBy('created_at', 'desc')->lockForUpdate()->first();
+    //         if ($latestBatch) {
+    //             $latestBatch->increment('quantity', $remainingToRestore);
+    //             $latestBatch->increment('initial_quantity', $remainingToRestore);
+    //         } else {
+    //             ProductStock::create([
+    //                 'product_id' => $productId,
+    //                 'batch_code' => 'RET-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4)),
+    //                 'quantity' => $remainingToRestore,
+    //                 'initial_quantity' => $remainingToRestore,
+    //             ]);
+    //         }
+    //     }
+
+    //     // Kunci dan kembalikan stok produk utama hanya jika produknya masih eksis
+    //     $product = Product::lockForUpdate()->find($productId);
+    //     if ($product) {
+    //         $product->increment('stock', $quantityToRestore);
+    //     }
+    // }
+
     public function restoreProductStock($productId, $quantityToRestore)
     {
         if ($quantityToRestore <= 0)
             return;
 
-        // Tetap kembalikan riwayat batch stok (ProductStock) MESKIPUN produk utama sudah terhapus
+        // 👇 1. KUNCI INDUK DULU (PARENT LOCK) 👇
+        $product = Product::lockForUpdate()->find($productId);
+
+        if (!$product) {
+            return; // Jika produk tidak ada, batalkan proses
+        }
+
+        // 👇 2. BARU KUNCI ANAKNYA (CHILD LOCK) 👇
         $remainingToRestore = $quantityToRestore;
         $incompleteBatches = ProductStock::where('product_id', $productId)
             ->whereColumn('quantity', '<', 'initial_quantity')
@@ -9277,11 +9332,8 @@ class TransactionController extends Controller
             }
         }
 
-        // Kunci dan kembalikan stok produk utama hanya jika produknya masih eksis
-        $product = Product::lockForUpdate()->find($productId);
-        if ($product) {
-            $product->increment('stock', $quantityToRestore);
-        }
+        // 3. Kembalikan stok produk utama
+        $product->increment('stock', $quantityToRestore);
     }
 
     public function checkout(Request $request)
@@ -9899,7 +9951,8 @@ class TransactionController extends Controller
                 $originalStatus = $transaction->getOriginal('status');
 
                 if (!in_array($originalStatus, $statusesThatAlreadyRestoredStock)) {
-                    foreach ($transaction->details as $detail) {
+                    $sortedDetails = $transaction->details->sortBy('product_id');
+                    foreach ($sortedDetails as $detail) {
                         $this->restoreProductStock($detail->product_id, $detail->quantity);
                     }
                 }
@@ -9917,6 +9970,8 @@ class TransactionController extends Controller
             if (str_contains(strtolower($errorMessage), 'not supported for this channel')) {
                 DB::transaction(function () use ($transaction) {
                     $transaction->update(['status' => 'refund_manual_required']);
+                    // 👇 TAMBAHKAN SORTING ANTI-DEADLOCK 👇
+                    $sortedDetails = $transaction->details->sortBy('product_id');
                     foreach ($transaction->details as $detail) {
                         $this->restoreProductStock($detail->product_id, $detail->quantity);
                     }
@@ -10394,6 +10449,51 @@ class TransactionController extends Controller
         return response()->json(['message' => 'Pesanan berhasil disetujui secara manual.']);
     }
 
+    // public function forceDeleteTransaction(Request $request, $id)
+    // {
+    //     $transaction = Transaction::with(['details', 'payment'])->find($id);
+
+    //     if (!$transaction) {
+    //         return response()->json(['message' => 'Transaksi tidak ditemukan.'], 404);
+    //     }
+
+    //     DB::transaction(function () use ($transaction) {
+    //         $statusesThatAlreadyRestoredStock = ['refund_manual_required', 'cancelled', 'shipping_failed', 'returned', 'refunded'];
+
+    //         if (!in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
+    //             foreach ($transaction->details as $detail) {
+    //                 $this->restoreProductStock($detail->product_id, $detail->quantity);
+    //             }
+    //         }
+
+    //         // 👇 [PERBAIKAN] GUNAKAN POINT LEDGER SERVICE 👇
+    //         if ($transaction->points_used > 0 && !in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
+    //             PointLedgerService::addPoints(
+    //                 $transaction->user_id,
+    //                 $transaction->points_used,
+    //                 'admin_adjustment',
+    //                 "Pengembalian poin karena penghapusan permanen pesanan: {$transaction->order_id}",
+    //                 $transaction->id
+    //             );
+    //         }
+
+    //         if ($transaction->payment) {
+    //             $transaction->payment->delete();
+    //         }
+
+    //         foreach ($transaction->details as $detail) {
+    //             Cache::forget("products.detail.{$detail->product_id}");
+    //             $detail->delete();
+    //         }
+
+    //         $transaction->delete();
+    //     });
+
+    //     Cache::flush();
+
+    //     return response()->json(['message' => 'Transaksi berhasil dihapus secara permanen beserta stok yang dikembalikan.']);
+    // }
+
     public function forceDeleteTransaction(Request $request, $id)
     {
         $transaction = Transaction::with(['details', 'payment'])->find($id);
@@ -10406,12 +10506,14 @@ class TransactionController extends Controller
             $statusesThatAlreadyRestoredStock = ['refund_manual_required', 'cancelled', 'shipping_failed', 'returned', 'refunded'];
 
             if (!in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
-                foreach ($transaction->details as $detail) {
+                // 👇 TAMBAHKAN SORTING ANTI-DEADLOCK 👇
+                $sortedDetails = $transaction->details->sortBy('product_id');
+                foreach ($sortedDetails as $detail) {
                     $this->restoreProductStock($detail->product_id, $detail->quantity);
                 }
             }
 
-            // 👇 [PERBAIKAN] GUNAKAN POINT LEDGER SERVICE 👇
+            // [PERBAIKAN] GUNAKAN POINT LEDGER SERVICE
             if ($transaction->points_used > 0 && !in_array($transaction->status, $statusesThatAlreadyRestoredStock)) {
                 PointLedgerService::addPoints(
                     $transaction->user_id,
