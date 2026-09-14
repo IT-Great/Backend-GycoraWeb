@@ -52,6 +52,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            // 👇 Tambahkan casting boolean ini wajib untuk Flutter
+            'is_membership' => 'boolean',
+            'is_subscribed' => 'boolean',
         ];
     }
 
