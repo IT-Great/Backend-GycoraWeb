@@ -1794,7 +1794,7 @@ class AuthController extends Controller
                 Log::warning('Google SSO Fraud Attempt: Token audience mismatch. Diterima: ' . ($googleUser['aud'] ?? 'Kosong'));
                 return response()->json([
                     'message' => 'Token Google tidak diotorisasi untuk aplikasi ini.',
-                    'debug_aud' => config('app.debug') ? $googleUser['aud'] : null 
+                    'debug_aud' => config('app.debug') ? $googleUser['aud'] : null
                 ], 403);
             }
 
@@ -1861,6 +1861,38 @@ class AuthController extends Controller
             Log::error('Google Login Error: ' . $e->getMessage());
             return response()->json(['message' => 'Terjadi kesalahan sistem saat menghubungi Google.'], 500);
         }
+    }
+
+    public function mobileLogin(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email',
+            'password' => 'required|string',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'email' => ['Email atau Password salah.'],
+            ]);
+        }
+
+        if (!in_array($user->usertype, ['user', 'reseller'])) {
+            throw ValidationException::withMessages([
+                'email' => ['Akses ditolak. Akun ini tidak memiliki hak akses sebagai pelanggan.'],
+            ]);
+        }
+
+        // Penamaan token dibedakan menjadi 'mobile_auth_token' untuk identifikasi device
+        $token = $user->createToken('mobile_auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login Mobile Berhasil',
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user,
+        ]);
     }
 
     public function getAllUsers()
@@ -2235,7 +2267,7 @@ class AuthController extends Controller
             $admin = User::where('email', $request->email)
                 ->whereIn('usertype', ['admin', 'superadmin', 'gudang', 'accounting', 'cs'])
                 ->first();
-            
+
             if (!$admin) {
                 throw new \Exception('Akses ditolak.');
             }
@@ -2291,7 +2323,7 @@ class AuthController extends Controller
     {
         // 🛡️ [PERBAIKAN FATAL 1] Mencegah Server Crash jika token sudah mati dari sisi Laravel
         $user = $request->user();
-        
+
         if (!$user) {
             // Jika masuk ke sini, artinya token sudah benar-benar mati dan ditolak Sanctum.
             return response()->json([
@@ -2303,7 +2335,7 @@ class AuthController extends Controller
         if ($user->currentAccessToken()) {
             $user->currentAccessToken()->delete();
         }
-        
+
         $newToken = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
