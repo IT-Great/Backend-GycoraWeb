@@ -326,6 +326,9 @@ Route::middleware('throttle:auth-limiter')->group(function () {
 
     // 👇 [BARU] Endpoint untuk Google Login
     Route::post('/auth/google', [AuthController::class, 'googleLogin']);
+
+    // 👇 TAMBAHKAN ENDPOINT KHUSUS MOBILE DI SINI
+    Route::post('/mobile/login', [AuthController::class, 'mobileLogin']);
 });
 
 // --- KLASTER OTP (Dibatasi 3 request / menit) ---
