@@ -765,6 +765,637 @@ class TransactionController extends Controller
     //     }
     // }
 
+    // public function checkout(Request $request)
+    // {
+    //     $user = $request->user();
+    //     if (!$user) {
+    //         return response()->json(['message' => 'Sesi kedaluwarsa. Silakan login kembali.'], 401);
+    //     }
+
+    //     $request->validate([
+    //         'address_id' => 'required',
+    //         'shipping_method' => 'required|in:free,biteship',
+    //         'use_points' => 'nullable|integer|min:0',
+    //         'cart_ids' => 'required|array',
+    //         'cart_ids.*' => 'exists:carts,id',
+    //         'shipping_cost' => 'nullable|numeric',
+    //         'courier_company' => 'nullable|string',
+    //         'courier_type' => 'nullable|string',
+    //         'delivery_type' => 'nullable|string',
+    //         'ab_test_variant' => 'nullable|string|in:A,B',
+    //     ]);
+
+    //     try {
+    //         // Mencegah Deadlock: Urutkan item keranjang berdasarkan product_id sebelum di-loop
+    //         $cartItems = Cart::with('product')
+    //             ->where('user_id', $user->id)
+    //             ->whereIn('id', $request->cart_ids)
+    //             ->get()
+    //             ->sortBy('product_id');
+
+    //         if ($cartItems->isEmpty()) {
+    //             return response()->json(['message' => 'Keranjang kosong saat diproses.'], 400);
+    //         }
+
+    //         // Variabel $transaction akan berisi model Transaction yang berhasil dibuat
+    //         $transaction = DB::transaction(function () use ($user, $cartItems, $request) {
+    //             $lockedUser = User::lockForUpdate()->find($user->id);
+
+    //             $promoType = $request->promo_type ?? null;
+    //             $inputCode = !empty($request->promo_code) ? strtoupper($request->promo_code) : null;
+    //             $appliedPromoCode = null;
+    //             $isClaimPromo = false;
+
+    //             if ($inputCode && $promoType === 'claim') {
+    //                 $promoClaim = PromoClaim::where('email', $lockedUser->email)->where('promo_code', $inputCode)->lockForUpdate()->first();
+    //                 if (!$promoClaim || $promoClaim->is_used)
+    //                     throw new \Exception('Promo tidak valid.');
+    //                 if ($promoClaim->expires_at && Carbon::now()->greaterThan($promoClaim->expires_at))
+    //                     throw new \Exception('Promo kedaluwarsa.');
+    //                 $appliedPromoCode = $promoClaim->promo_code;
+    //                 $promoClaim->update(['is_used' => true, 'used_at' => now()]);
+    //                 $isClaimPromo = true;
+    //             } elseif ($inputCode && $promoType === 'voucher') {
+    //                 $voucher = PromoCode::where('code', $inputCode)->lockForUpdate()->first();
+    //                 if (!$voucher || ($voucher->expires_at && now()->greaterThan($voucher->expires_at)) || $voucher->times_used >= $voucher->max_uses)
+    //                     throw new \Exception('Voucher habis.');
+    //                 $appliedPromoCode = $voucher->code;
+    //                 $voucher->increment('times_used');
+    //             }
+
+    //             $totalAmount = 0;
+    //             $itemTotals = [];
+    //             $driversPool = [];
+    //             $partnersPool = [];
+    //             $hasBundleProduct = false;
+
+    //             $totalCartQty = $cartItems->sum('quantity');
+    //             $isWholesaleGlobal = $lockedUser->usertype === 'reseller' && $totalCartQty >= 24;
+
+    //             $lockedProductsByCartId = [];
+
+    //             foreach ($cartItems as $item) {
+    //                 $product = Product::with('category')->lockForUpdate()->find($item->product_id);
+    //                 $lockedProductsByCartId[$item->id] = $product;
+    //                 if (!$product || $product->stock < $item->quantity)
+    //                     throw new \Exception('Stok produk ' . ($product ? $product->name : 'dihapus') . ' telah habis.');
+
+    //                 $normalPrice = $product->price;
+    //                 if ($isWholesaleGlobal && $product->wholesale_price > 0)
+    //                     $normalPrice = $product->wholesale_price;
+    //                 elseif ($product->discount_price > 0 && $product->discount_price < $product->price)
+    //                     $normalPrice = $product->discount_price;
+
+    //                 if ($promoType === 'voucher' && $product->voucher_discount_price > 0)
+    //                     $normalPrice = $product->voucher_discount_price;
+
+    //                 $itemTotals[$item->id] = 0;
+
+    //                 if ($isWholesaleGlobal && $product->wholesale_price > 0) {
+    //                     $itemTotals[$item->id] = $normalPrice * $item->quantity;
+    //                     continue;
+    //                 }
+
+    //                 $sku = strtoupper($product->sku ?? '');
+    //                 $isEGB = str_starts_with($sku, 'EGB');
+    //                 $isBundleValid = filter_var($product->is_bundle_active, FILTER_VALIDATE_BOOLEAN) || ($product->category && $product->category->code === 'BN-01');
+
+    //                 if ($isBundleValid)
+    //                     $hasBundleProduct = true;
+
+    //                 $isValidDate = true;
+    //                 if (!empty($product->bundle_end_date) && $product->bundle_end_date !== '0000-00-00 00:00:00') {
+    //                     try {
+    //                         $isValidDate = Carbon::parse($product->bundle_end_date)->isFuture();
+    //                     } catch (\Exception $e) {
+    //                         $isValidDate = false;
+    //                     }
+    //                 }
+
+    //                 $isDriver = $isEGB && $isBundleValid && $isValidDate && $product->bundle_price > 0;
+
+    //                 for ($i = 0; $i < $item->quantity; $i++) {
+    //                     $poolItem = ['cart_id' => $item->id, 'normal_price' => $normalPrice, 'bundle_price' => $product->bundle_price ?? 0];
+    //                     if ($isDriver)
+    //                         $driversPool[] = $poolItem;
+    //                     elseif (!$isEGB)
+    //                         $partnersPool[] = $poolItem;
+    //                     else
+    //                         $itemTotals[$item->id] += $normalPrice;
+    //                 }
+    //             }
+
+    //             if (count($driversPool) > 0 && count($partnersPool) > 0) {
+    //                 usort($driversPool, function ($a, $b) {
+    //                     return $b['bundle_price'] <=> $a['bundle_price'];
+    //                 });
+    //                 while (count($driversPool) > 0 && count($partnersPool) > 0) {
+    //                     $driver = array_shift($driversPool);
+    //                     $partner = array_shift($partnersPool);
+    //                     $discountForPair = ($driver['normal_price'] + $partner['normal_price']) - $driver['bundle_price'];
+
+    //                     if ($discountForPair > 0) {
+    //                         $driverProdModel = $lockedProductsByCartId[$driver['cart_id']];
+    //                         if ($driverProdModel->has_bundle_freebie && $driverProdModel->bundle_freebie_quota > 0) {
+    //                             $driverProdModel->bundle_freebie_quota -= 1;
+    //                             $driverProdModel->save();
+    //                         }
+    //                         $halfPrice = floor($driver['bundle_price'] / 2);
+    //                         $remainder = $driver['bundle_price'] % 2;
+
+    //                         $itemTotals[$driver['cart_id']] += ($halfPrice + $remainder);
+    //                         $itemTotals[$partner['cart_id']] += $halfPrice;
+    //                     } else {
+    //                         $itemTotals[$driver['cart_id']] += $driver['normal_price'];
+    //                         $itemTotals[$partner['cart_id']] += $partner['normal_price'];
+    //                     }
+    //                 }
+    //             }
+
+    //             foreach ($driversPool as $driver)
+    //                 $itemTotals[$driver['cart_id']] += $driver['normal_price'];
+    //             foreach ($partnersPool as $partner)
+    //                 $itemTotals[$partner['cart_id']] += $partner['normal_price'];
+
+    //             $totalAmount = (int) array_sum($itemTotals);
+
+    //             $promoEngine = new \App\Services\PromoEngineService;
+    //             $dynamicPromoResult = $promoEngine->calculate($totalAmount, $hasBundleProduct);
+    //             $merdekaDiscount = $dynamicPromoResult['discount_amount'];
+    //             if ($dynamicPromoResult['promo_tag'])
+    //                 $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode . ' + ' . $dynamicPromoResult['promo_tag'] : $dynamicPromoResult['promo_tag'];
+
+    //             $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
+
+    //             $promoDiscountAmount = 0;
+    //             if ($isClaimPromo) {
+    //                 if ($totalAmount < 50000)
+    //                     throw new \Exception('Minimum belanja Rp 50.000');
+    //                 $promoDiscountAmount = floor($totalAmount * 0.1) + min(10000, $totalShippingCost);
+    //             }
+    //             $promoDiscountAmount += $merdekaDiscount;
+
+    //             $totalAfterPromo = (int) max(0, ($totalAmount + $totalShippingCost) - $promoDiscountAmount);
+    //             $orderId = 'SOL-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
+
+    //             $earnedPoints = $lockedUser->is_membership ? floor($totalAmount / 100000) : 0;
+    //             $pointsUsed = 0;
+
+    //             if ($request->use_points > 0 && $lockedUser->is_membership) {
+    //                 $pointsUsed = floor(min($request->use_points * 1000, $totalAfterPromo) / 1000);
+    //             }
+
+    //             $address = \App\Models\Address::find($request->address_id);
+    //             $buyerLat = $address && $address->latitude ? (float) $address->latitude : -6.2088;
+    //             $buyerLon = $address && $address->longitude ? (float) $address->longitude : 106.8456;
+
+    //             $warehouses = [
+    //                 ['code' => 'WH-JKT', 'name' => 'Jakarta Central', 'lat' => -6.2088, 'lon' => 106.8456],
+    //                 ['code' => 'WH-SUB', 'name' => 'Surabaya Hub', 'lat' => -7.2504, 'lon' => 112.7688],
+    //                 ['code' => 'WH-DPS', 'name' => 'Bali Fulfillment', 'lat' => -8.4095, 'lon' => 115.1889],
+    //             ];
+
+    //             foreach ($warehouses as &$wh) {
+    //                 $wh['distance'] = $this->calculateHaversineDistance($buyerLat, $buyerLon, $wh['lat'], $wh['lon']);
+    //             }
+
+    //             usort($warehouses, function ($a, $b) {
+    //                 return $a['distance'] <=> $b['distance'];
+    //             });
+
+    //             $fraudAnalysis = app(FraudDetectionService::class)->analyze($lockedUser, $request->ip(), $address ? $address->first_name_address : 'Unknown', $totalAmount, $address ? $address->city : 'Unknown');
+
+    //             $createdTransaction = Transaction::create([
+    //                 'user_id' => $lockedUser->id,
+    //                 'address_id' => $request->address_id,
+    //                 'shipping_method' => $request->shipping_method,
+    //                 'shipping_cost' => $totalShippingCost,
+    //                 'courier_company' => $request->shipping_method === 'free' ? 'Internal' : $request->courier_company,
+    //                 'courier_type' => $request->shipping_method === 'free' ? 'Next Day' : $request->courier_type,
+    //                 'delivery_type' => $request->shipping_method === 'free' ? 'later' : ($request->delivery_type ?? 'later'),
+    //                 'order_id' => $orderId,
+    //                 'total_amount' => $totalAmount,
+    //                 'status' => 'pending',
+    //                 'point' => $earnedPoints,
+    //                 'points_used' => $pointsUsed,
+    //                 'promo_code' => $appliedPromoCode,
+    //                 'promo_discount' => $promoDiscountAmount,
+    //                 'fraud_score' => $fraudAnalysis['score'],
+    //                 'fraud_flags' => $fraudAnalysis['flags'],
+    //                 'ab_test_variant' => $request->ab_test_variant ?? 'A',
+    //             ]);
+
+    //             if ($pointsUsed > 0) {
+    //                 PointLedgerService::deductPoints(
+    //                     $lockedUser->id,
+    //                     $pointsUsed,
+    //                     'checkout_usage',
+    //                     "Penggunaan poin untuk Order ID: {$orderId}",
+    //                     $createdTransaction->id
+    //                 );
+    //             }
+
+    //             foreach ($cartItems as $item) {
+    //                 $product = Product::find($item->product_id);
+    //                 $calculatedGross = $itemTotals[$item->id] ?? 0;
+
+    //                 TransactionDetail::create([
+    //                     'transaction_id' => $createdTransaction->id,
+    //                     'product_id' => $item->product_id,
+    //                     'quantity' => $item->quantity,
+    //                     'price' => $item->quantity > 0 ? floor($calculatedGross / $item->quantity) : 0,
+    //                     'color' => $item->color,
+    //                 ]);
+
+    //                 $product->decrement('stock', $item->quantity);
+    //             }
+
+    //             Cart::where('user_id', $lockedUser->id)->whereIn('id', $request->cart_ids)->delete();
+    //             $this->sendMetaConversionApiEvent($createdTransaction, $lockedUser, $cartItems, $totalAmount, $itemTotals);
+
+    //             return $createdTransaction; // Me-return model Transaction
+    //         });
+
+    //         // 👇 PERBAIKAN: Gunakan $transaction->id yang berasal dari kembalian DB::transaction
+    //         $paymentController = app(PaymentController::class);
+    //         $invoiceRequest = \Illuminate\Http\Request::create('/api/payment', 'POST', [
+    //             'transaction_id' => $transaction->id,
+    //             'currency' => 'IDR',
+    //             'user_id' => $user->id,
+    //         ]);
+
+    //         // Bypass autentikasi untuk Request palsu ini
+    //         $invoiceRequest->setUserResolver(function () use ($user) {
+    //             return $user;
+    //         });
+
+    //         $invoiceRes = $paymentController->createInvoice($invoiceRequest);
+
+    //         // Pastikan kita menangkap data Array dengan benar dari JSON response
+    //         $invoiceData = json_decode($invoiceRes->getContent(), true);
+
+    //         return response()->json([
+    //             'status' => 'success',
+    //             'checkout_url' => $invoiceData['checkout_url']
+    //         ]);
+
+    //     } catch (\Exception $e) {
+    //         // Kita rekam Error secara eksplisit agar muncul di Laravel.log!
+    //         Log::error('Checkout API Error: ' . $e->getMessage() . ' File: ' . $e->getFile() . ' Line: ' . $e->getLine());
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'Terjadi kesalahan sistem saat memproses pesanan. Silakan coba lagi.'
+    //         ], 400);
+    //     }
+    // }
+
+    // public function checkout(Request $request)
+    // {
+    //     $user = $request->user();
+    //     if (!$user) {
+    //         return response()->json(['message' => 'Sesi kedaluwarsa. Silakan login kembali.'], 401);
+    //     }
+
+    //     $request->validate([
+    //         'address_id' => 'required',
+    //         'shipping_method' => 'required|in:free,biteship',
+    //         'use_points' => 'nullable|integer|min:0',
+    //         'cart_ids' => 'required|array',
+    //         'cart_ids.*' => 'exists:carts,id',
+    //         'shipping_cost' => 'nullable|numeric',
+    //         'courier_company' => 'nullable|string',
+    //         'courier_type' => 'nullable|string',
+    //         'delivery_type' => 'nullable|string',
+    //         'ab_test_variant' => 'nullable|string|in:A,B',
+    //     ]);
+
+    //     try {
+    //         // Urutkan item keranjang berdasarkan product_id sebelum di-loop untuk menghindari deadlock
+    //         $cartItems = Cart::with('product')
+    //             ->where('user_id', $user->id)
+    //             ->whereIn('id', $request->cart_ids)
+    //             ->get()
+    //             ->sortBy('product_id');
+
+    //         if ($cartItems->isEmpty()) {
+    //             return response()->json(['message' => 'Keranjang kosong saat diproses.'], 400);
+    //         }
+
+    //         // Variabel ini akan menampung array berisi Model Transaction dan Invoice URL
+    //         $checkoutResult = DB::transaction(function () use ($user, $cartItems, $request) {
+    //             $lockedUser = User::lockForUpdate()->find($user->id);
+
+    //             $promoType = $request->promo_type ?? null;
+    //             $inputCode = !empty($request->promo_code) ? strtoupper($request->promo_code) : null;
+    //             $appliedPromoCode = null;
+    //             $isClaimPromo = false;
+
+    //             if ($inputCode && $promoType === 'claim') {
+    //                 $promoClaim = PromoClaim::where('email', $lockedUser->email)->where('promo_code', $inputCode)->lockForUpdate()->first();
+    //                 if (!$promoClaim || $promoClaim->is_used)
+    //                     throw new \Exception('Promo tidak valid.');
+    //                 if ($promoClaim->expires_at && Carbon::now()->greaterThan($promoClaim->expires_at))
+    //                     throw new \Exception('Promo kedaluwarsa.');
+    //                 $appliedPromoCode = $promoClaim->promo_code;
+    //                 $promoClaim->update(['is_used' => true, 'used_at' => now()]);
+    //                 $isClaimPromo = true;
+    //             } elseif ($inputCode && $promoType === 'voucher') {
+    //                 $voucher = PromoCode::where('code', $inputCode)->lockForUpdate()->first();
+    //                 if (!$voucher || ($voucher->expires_at && now()->greaterThan($voucher->expires_at)) || $voucher->times_used >= $voucher->max_uses)
+    //                     throw new \Exception('Voucher habis.');
+    //                 $appliedPromoCode = $voucher->code;
+    //                 $voucher->increment('times_used');
+    //             }
+
+    //             $totalAmount = 0;
+    //             $itemTotals = [];
+    //             $driversPool = [];
+    //             $partnersPool = [];
+    //             $hasBundleProduct = false;
+
+    //             $totalCartQty = $cartItems->sum('quantity');
+    //             $isWholesaleGlobal = $lockedUser->usertype === 'reseller' && $totalCartQty >= 24;
+
+    //             $lockedProductsByCartId = [];
+
+    //             foreach ($cartItems as $item) {
+    //                 $product = Product::with('category')->lockForUpdate()->find($item->product_id);
+    //                 $lockedProductsByCartId[$item->id] = $product;
+    //                 if (!$product || $product->stock < $item->quantity)
+    //                     throw new \Exception('Stok produk ' . ($product ? $product->name : 'dihapus') . ' telah habis.');
+
+    //                 $normalPrice = $product->price;
+    //                 if ($isWholesaleGlobal && $product->wholesale_price > 0)
+    //                     $normalPrice = $product->wholesale_price;
+    //                 elseif ($product->discount_price > 0 && $product->discount_price < $product->price)
+    //                     $normalPrice = $product->discount_price;
+
+    //                 if ($promoType === 'voucher' && $product->voucher_discount_price > 0)
+    //                     $normalPrice = $product->voucher_discount_price;
+
+    //                 $itemTotals[$item->id] = 0;
+
+    //                 if ($isWholesaleGlobal && $product->wholesale_price > 0) {
+    //                     $itemTotals[$item->id] = $normalPrice * $item->quantity;
+    //                     continue;
+    //                 }
+
+    //                 $sku = strtoupper($product->sku ?? '');
+    //                 $isEGB = str_starts_with($sku, 'EGB');
+    //                 $isBundleValid = filter_var($product->is_bundle_active, FILTER_VALIDATE_BOOLEAN) || ($product->category && $product->category->code === 'BN-01');
+
+    //                 if ($isBundleValid)
+    //                     $hasBundleProduct = true;
+
+    //                 $isValidDate = true;
+    //                 if (!empty($product->bundle_end_date) && $product->bundle_end_date !== '0000-00-00 00:00:00') {
+    //                     try {
+    //                         $isValidDate = Carbon::parse($product->bundle_end_date)->isFuture();
+    //                     } catch (\Exception $e) {
+    //                         $isValidDate = false;
+    //                     }
+    //                 }
+
+    //                 $isDriver = $isEGB && $isBundleValid && $isValidDate && $product->bundle_price > 0;
+
+    //                 for ($i = 0; $i < $item->quantity; $i++) {
+    //                     $poolItem = ['cart_id' => $item->id, 'normal_price' => $normalPrice, 'bundle_price' => $product->bundle_price ?? 0];
+    //                     if ($isDriver)
+    //                         $driversPool[] = $poolItem;
+    //                     elseif (!$isEGB)
+    //                         $partnersPool[] = $poolItem;
+    //                     else
+    //                         $itemTotals[$item->id] += $normalPrice;
+    //                 }
+    //             }
+
+    //             if (count($driversPool) > 0 && count($partnersPool) > 0) {
+    //                 usort($driversPool, function ($a, $b) {
+    //                     return $b['bundle_price'] <=> $a['bundle_price'];
+    //                 });
+    //                 while (count($driversPool) > 0 && count($partnersPool) > 0) {
+    //                     $driver = array_shift($driversPool);
+    //                     $partner = array_shift($partnersPool);
+    //                     $discountForPair = ($driver['normal_price'] + $partner['normal_price']) - $driver['bundle_price'];
+
+    //                     if ($discountForPair > 0) {
+    //                         $driverProdModel = $lockedProductsByCartId[$driver['cart_id']];
+    //                         if ($driverProdModel->has_bundle_freebie && $driverProdModel->bundle_freebie_quota > 0) {
+    //                             $driverProdModel->bundle_freebie_quota -= 1;
+    //                             $driverProdModel->save();
+    //                         }
+    //                         $halfPrice = floor($driver['bundle_price'] / 2);
+    //                         $remainder = $driver['bundle_price'] % 2;
+
+    //                         $itemTotals[$driver['cart_id']] += ($halfPrice + $remainder);
+    //                         $itemTotals[$partner['cart_id']] += $halfPrice;
+    //                     } else {
+    //                         $itemTotals[$driver['cart_id']] += $driver['normal_price'];
+    //                         $itemTotals[$partner['cart_id']] += $partner['normal_price'];
+    //                     }
+    //                 }
+    //             }
+
+    //             foreach ($driversPool as $driver)
+    //                 $itemTotals[$driver['cart_id']] += $driver['normal_price'];
+    //             foreach ($partnersPool as $partner)
+    //                 $itemTotals[$partner['cart_id']] += $partner['normal_price'];
+
+    //             $totalAmount = (int) array_sum($itemTotals);
+
+    //             $promoEngine = new \App\Services\PromoEngineService;
+    //             $dynamicPromoResult = $promoEngine->calculate($totalAmount, $hasBundleProduct);
+    //             $merdekaDiscount = $dynamicPromoResult['discount_amount'];
+    //             if ($dynamicPromoResult['promo_tag'])
+    //                 $appliedPromoCode = $appliedPromoCode ? $appliedPromoCode . ' + ' . $dynamicPromoResult['promo_tag'] : $dynamicPromoResult['promo_tag'];
+
+    //             $totalShippingCost = $request->shipping_method === 'free' ? 0 : ($request->shipping_cost ?? 0);
+
+    //             $promoDiscountAmount = 0;
+    //             if ($isClaimPromo) {
+    //                 if ($totalAmount < 50000)
+    //                     throw new \Exception('Minimum belanja Rp 50.000');
+    //                 $promoDiscountAmount = floor($totalAmount * 0.1) + min(10000, $totalShippingCost);
+    //             }
+    //             $promoDiscountAmount += $merdekaDiscount;
+
+    //             $totalAfterPromo = (int) max(0, ($totalAmount + $totalShippingCost) - $promoDiscountAmount);
+    //             $orderId = 'SOL-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
+
+    //             $earnedPoints = $lockedUser->is_membership ? floor($totalAmount / 100000) : 0;
+    //             $pointsUsed = 0;
+
+    //             if ($request->use_points > 0 && $lockedUser->is_membership) {
+    //                 $pointsUsed = floor(min($request->use_points * 1000, $totalAfterPromo) / 1000);
+    //             }
+
+    //             $address = \App\Models\Address::find($request->address_id);
+    //             $buyerLat = $address && $address->latitude ? (float) $address->latitude : -6.2088;
+    //             $buyerLon = $address && $address->longitude ? (float) $address->longitude : 106.8456;
+
+    //             $warehouses = [
+    //                 ['code' => 'WH-JKT', 'name' => 'Jakarta Central', 'lat' => -6.2088, 'lon' => 106.8456],
+    //                 ['code' => 'WH-SUB', 'name' => 'Surabaya Hub', 'lat' => -7.2504, 'lon' => 112.7688],
+    //                 ['code' => 'WH-DPS', 'name' => 'Bali Fulfillment', 'lat' => -8.4095, 'lon' => 115.1889],
+    //             ];
+
+    //             foreach ($warehouses as &$wh) {
+    //                 $wh['distance'] = $this->calculateHaversineDistance($buyerLat, $buyerLon, $wh['lat'], $wh['lon']);
+    //             }
+
+    //             usort($warehouses, function ($a, $b) {
+    //                 return $a['distance'] <=> $b['distance'];
+    //             });
+
+    //             // Bungkus Fraud Detection dalam try-catch agar jika service ini mati, transaksi tetap jalan
+    //             $fraudScore = 0;
+    //             $fraudFlags = null;
+    //             try {
+    //                 $receiverName = $address ? $address->first_name_address . ' ' . $address->last_name_address : 'Unknown';
+    //                 $fraudAnalysis = app(FraudDetectionService::class)->analyze($lockedUser, $request->ip(), $receiverName, $totalAmount, $address ? $address->city : 'Unknown');
+    //                 $fraudScore = $fraudAnalysis['score'];
+    //                 $fraudFlags = $fraudAnalysis['flags'];
+    //             } catch (\Exception $e) {
+    //                 Log::warning('Fraud Detection Bypassed: ' . $e->getMessage());
+    //             }
+
+    //             $createdTransaction = Transaction::create([
+    //                 'user_id' => $lockedUser->id,
+    //                 'address_id' => $request->address_id,
+    //                 'shipping_method' => $request->shipping_method,
+    //                 'shipping_cost' => $totalShippingCost,
+    //                 'courier_company' => $request->shipping_method === 'free' ? 'Internal' : $request->courier_company,
+    //                 'courier_type' => $request->shipping_method === 'free' ? 'Next Day' : $request->courier_type,
+    //                 'delivery_type' => $request->shipping_method === 'free' ? 'later' : ($request->delivery_type ?? 'later'),
+    //                 'order_id' => $orderId,
+    //                 'total_amount' => $totalAmount,
+    //                 'status' => 'pending',
+    //                 'point' => $earnedPoints,
+    //                 'points_used' => $pointsUsed,
+    //                 'promo_code' => $appliedPromoCode,
+    //                 'promo_discount' => $promoDiscountAmount,
+    //                 'fraud_score' => $fraudScore,
+    //                 'fraud_flags' => $fraudFlags,
+    //                 'ab_test_variant' => $request->ab_test_variant ?? 'A',
+    //             ]);
+
+    //             if ($pointsUsed > 0) {
+    //                 PointLedgerService::deductPoints(
+    //                     $lockedUser->id,
+    //                     $pointsUsed,
+    //                     'checkout_usage',
+    //                     "Penggunaan poin untuk Order ID: {$orderId}",
+    //                     $createdTransaction->id
+    //                 );
+    //             }
+
+    //             $xenditItems = []; // Array untuk dikirim ke Xendit
+
+    //             foreach ($cartItems as $item) {
+    //                 $product = Product::find($item->product_id);
+    //                 $calculatedGross = $itemTotals[$item->id] ?? 0;
+
+    //                 $pricePerUnit = $item->quantity > 0 ? floor($calculatedGross / $item->quantity) : 0;
+
+    //                 TransactionDetail::create([
+    //                     'transaction_id' => $createdTransaction->id,
+    //                     'product_id' => $item->product_id,
+    //                     'quantity' => $item->quantity,
+    //                     'price' => $pricePerUnit,
+    //                     'color' => $item->color,
+    //                 ]);
+
+    //                 $product->decrement('stock', $item->quantity);
+
+    //                 // Kumpulkan data item untuk Xendit
+    //                 $xenditItems[] = [
+    //                     'name' => substr($product->name, 0, 50), // Pastikan panjang karakter aman
+    //                     'quantity' => $item->quantity,
+    //                     'price' => (int) $pricePerUnit,
+    //                     'category' => 'PHYSICAL_PRODUCT'
+    //                 ];
+    //             }
+
+    //             Cart::where('user_id', $lockedUser->id)->whereIn('id', $request->cart_ids)->delete();
+    //             $this->sendMetaConversionApiEvent($createdTransaction, $lockedUser, $cartItems, $totalAmount, $itemTotals);
+
+    //             // --- EKSEKUSI XENDIT LANGSUNG DI DALAM BLOK INI ---
+
+    //             $pointDiscountValue = $pointsUsed * 1000;
+
+    //             if ($promoDiscountAmount > 0) {
+    //                 $xenditItems[] = [
+    //                     'name' => 'Promo Discount',
+    //                     'quantity' => 1,
+    //                     'price' => -(int) $promoDiscountAmount,
+    //                     'category' => 'DISCOUNT'
+    //                 ];
+    //             }
+
+    //             if ($pointDiscountValue > 0) {
+    //                 $xenditItems[] = [
+    //                     'name' => "Points Used ($pointsUsed)",
+    //                     'quantity' => 1,
+    //                     'price' => -(int) $pointDiscountValue,
+    //                     'category' => 'DISCOUNT'
+    //                 ];
+    //             }
+
+    //             if ($totalShippingCost > 0) {
+    //                 $xenditItems[] = [
+    //                     'name' => 'Shipping Fee',
+    //                     'quantity' => 1,
+    //                     'price' => (int) $totalShippingCost,
+    //                     'category' => 'SHIPPING_FEE'
+    //                 ];
+    //             }
+
+    //             $finalPaymentAmount = (int) $totalAmount + (int) $totalShippingCost - $promoDiscountAmount - $pointDiscountValue;
+    //             $externalId = 'PAY-' . $createdTransaction->order_id;
+
+    //             $invoiceRequest = new \Xendit\Invoice\CreateInvoiceRequest([
+    //                 'external_id' => $externalId,
+    //                 'payer_email' => $lockedUser->email,
+    //                 'amount' => $finalPaymentAmount,
+    //                 'description' => 'Payment for Order ' . $createdTransaction->order_id,
+    //                 'items' => $xenditItems,
+    //                 'success_redirect_url' => config('app.frontend_url') . '/payment-success?external_id=' . $externalId . '&order_id=' . $createdTransaction->order_id,
+    //                 'failure_redirect_url' => config('app.frontend_url') . '/payment-failed',
+    //             ]);
+
+    //             $api = new \Xendit\Invoice\InvoiceApi;
+    //             $invoice = $api->createInvoice($invoiceRequest);
+
+    //             Payment::create([
+    //                 'transaction_id' => $createdTransaction->id,
+    //                 'external_id' => $externalId,
+    //                 'checkout_url' => $invoice['invoice_url'],
+    //                 'amount' => $finalPaymentAmount,
+    //                 'status' => 'pending',
+    //             ]);
+
+    //             return [
+    //                 'transaction' => $createdTransaction,
+    //                 'checkout_url' => $invoice['invoice_url']
+    //             ];
+    //         });
+
+    //         // Respon sukses, langsung lempar URL Xendit
+    //         return response()->json([
+    //             'status' => 'success',
+    //             'checkout_url' => $transaction['checkout_url']
+    //         ]);
+
+    //     } catch (\Throwable $th) {
+    //         // Gunakan \Throwable untuk menangkap BUKAN HANYA Exception, tapi juga PHP Fatal Error/TypeError!
+    //         Log::error('Direct Checkout Error: ' . $th->getMessage() . ' File: ' . $th->getFile() . ' Line: ' . $th->getLine());
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'Terjadi kesalahan: ' . $th->getMessage()
+    //         ], 400); // Ganti 500 menjadi 400 agar CORS tidak menghalanginya
+    //     }
+    // }
+
     public function checkout(Request $request)
     {
         $user = $request->user();
@@ -786,7 +1417,6 @@ class TransactionController extends Controller
         ]);
 
         try {
-            // Mencegah Deadlock: Urutkan item keranjang berdasarkan product_id sebelum di-loop
             $cartItems = Cart::with('product')
                 ->where('user_id', $user->id)
                 ->whereIn('id', $request->cart_ids)
@@ -797,8 +1427,8 @@ class TransactionController extends Controller
                 return response()->json(['message' => 'Keranjang kosong saat diproses.'], 400);
             }
 
-            // Variabel $transaction akan berisi model Transaction yang berhasil dibuat
-            $transaction = DB::transaction(function () use ($user, $cartItems, $request) {
+            // 👇 PERBAIKAN: Ubah nama variabel agar konsisten
+            $checkoutResult = DB::transaction(function () use ($user, $cartItems, $request) {
                 $lockedUser = User::lockForUpdate()->find($user->id);
 
                 $promoType = $request->promo_type ?? null;
@@ -963,7 +1593,16 @@ class TransactionController extends Controller
                     return $a['distance'] <=> $b['distance'];
                 });
 
-                $fraudAnalysis = app(FraudDetectionService::class)->analyze($lockedUser, $request->ip(), $address ? $address->first_name_address : 'Unknown', $totalAmount, $address ? $address->city : 'Unknown');
+                $fraudScore = 0;
+                $fraudFlags = null;
+                try {
+                    $receiverName = $address ? $address->first_name_address . ' ' . $address->last_name_address : 'Unknown';
+                    $fraudAnalysis = app(FraudDetectionService::class)->analyze($lockedUser, $request->ip(), $receiverName, $totalAmount, $address ? $address->city : 'Unknown');
+                    $fraudScore = $fraudAnalysis['score'];
+                    $fraudFlags = $fraudAnalysis['flags'];
+                } catch (\Exception $e) {
+                    Log::warning('Fraud Detection Bypassed: ' . $e->getMessage());
+                }
 
                 $createdTransaction = Transaction::create([
                     'user_id' => $lockedUser->id,
@@ -980,8 +1619,8 @@ class TransactionController extends Controller
                     'points_used' => $pointsUsed,
                     'promo_code' => $appliedPromoCode,
                     'promo_discount' => $promoDiscountAmount,
-                    'fraud_score' => $fraudAnalysis['score'],
-                    'fraud_flags' => $fraudAnalysis['flags'],
+                    'fraud_score' => $fraudScore,
+                    'fraud_flags' => $fraudFlags,
                     'ab_test_variant' => $request->ab_test_variant ?? 'A',
                 ]);
 
@@ -995,56 +1634,105 @@ class TransactionController extends Controller
                     );
                 }
 
+                $xenditItems = [];
+
                 foreach ($cartItems as $item) {
                     $product = Product::find($item->product_id);
                     $calculatedGross = $itemTotals[$item->id] ?? 0;
+
+                    $pricePerUnit = $item->quantity > 0 ? floor($calculatedGross / $item->quantity) : 0;
 
                     TransactionDetail::create([
                         'transaction_id' => $createdTransaction->id,
                         'product_id' => $item->product_id,
                         'quantity' => $item->quantity,
-                        'price' => $item->quantity > 0 ? floor($calculatedGross / $item->quantity) : 0,
+                        'price' => $pricePerUnit,
                         'color' => $item->color,
                     ]);
 
                     $product->decrement('stock', $item->quantity);
+
+                    $xenditItems[] = [
+                        'name' => substr($product->name, 0, 50),
+                        'quantity' => $item->quantity,
+                        'price' => (int) $pricePerUnit,
+                        'category' => 'PHYSICAL_PRODUCT'
+                    ];
                 }
 
                 Cart::where('user_id', $lockedUser->id)->whereIn('id', $request->cart_ids)->delete();
                 $this->sendMetaConversionApiEvent($createdTransaction, $lockedUser, $cartItems, $totalAmount, $itemTotals);
 
-                return $createdTransaction; // Me-return model Transaction
+                $pointDiscountValue = $pointsUsed * 1000;
+
+                if ($promoDiscountAmount > 0) {
+                    $xenditItems[] = [
+                        'name' => 'Promo Discount',
+                        'quantity' => 1,
+                        'price' => -(int) $promoDiscountAmount,
+                        'category' => 'DISCOUNT'
+                    ];
+                }
+
+                if ($pointDiscountValue > 0) {
+                    $xenditItems[] = [
+                        'name' => "Points Used ($pointsUsed)",
+                        'quantity' => 1,
+                        'price' => -(int) $pointDiscountValue,
+                        'category' => 'DISCOUNT'
+                    ];
+                }
+
+                if ($totalShippingCost > 0) {
+                    $xenditItems[] = [
+                        'name' => 'Shipping Fee',
+                        'quantity' => 1,
+                        'price' => (int) $totalShippingCost,
+                        'category' => 'SHIPPING_FEE'
+                    ];
+                }
+
+                $finalPaymentAmount = (int) $totalAmount + (int) $totalShippingCost - $promoDiscountAmount - $pointDiscountValue;
+                $externalId = 'PAY-' . $createdTransaction->order_id;
+
+                $invoiceRequest = new \Xendit\Invoice\CreateInvoiceRequest([
+                    'external_id' => $externalId,
+                    'payer_email' => $lockedUser->email,
+                    'amount' => $finalPaymentAmount,
+                    'description' => 'Payment for Order ' . $createdTransaction->order_id,
+                    'items' => $xenditItems,
+                    'success_redirect_url' => config('app.frontend_url') . '/payment-success?external_id=' . $externalId . '&order_id=' . $createdTransaction->order_id,
+                    'failure_redirect_url' => config('app.frontend_url') . '/payment-failed',
+                ]);
+
+                $api = new \Xendit\Invoice\InvoiceApi;
+                $invoice = $api->createInvoice($invoiceRequest);
+
+                Payment::create([
+                    'transaction_id' => $createdTransaction->id,
+                    'external_id' => $externalId,
+                    'checkout_url' => $invoice['invoice_url'],
+                    'amount' => $finalPaymentAmount,
+                    'status' => 'pending',
+                ]);
+
+                return [
+                    'transaction' => $createdTransaction,
+                    'checkout_url' => $invoice['invoice_url']
+                ];
             });
 
-            // 👇 PERBAIKAN: Gunakan $transaction->id yang berasal dari kembalian DB::transaction
-            $paymentController = app(PaymentController::class);
-            $invoiceRequest = \Illuminate\Http\Request::create('/api/payment', 'POST', [
-                'transaction_id' => $transaction->id,
-                'currency' => 'IDR',
-                'user_id' => $user->id,
-            ]);
-
-            // Bypass autentikasi untuk Request palsu ini
-            $invoiceRequest->setUserResolver(function () use ($user) {
-                return $user;
-            });
-
-            $invoiceRes = $paymentController->createInvoice($invoiceRequest);
-
-            // Pastikan kita menangkap data Array dengan benar dari JSON response
-            $invoiceData = json_decode($invoiceRes->getContent(), true);
-
+            // 👇 PERBAIKAN: Gunakan $checkoutResult alih-alih $transaction
             return response()->json([
                 'status' => 'success',
-                'checkout_url' => $invoiceData['checkout_url']
+                'checkout_url' => $checkoutResult['checkout_url']
             ]);
 
-        } catch (\Exception $e) {
-            // Kita rekam Error secara eksplisit agar muncul di Laravel.log!
-            Log::error('Checkout API Error: ' . $e->getMessage() . ' File: ' . $e->getFile() . ' Line: ' . $e->getLine());
+        } catch (\Throwable $th) {
+            Log::error('Direct Checkout Error: ' . $th->getMessage() . ' File: ' . $th->getFile() . ' Line: ' . $th->getLine());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Terjadi kesalahan sistem saat memproses pesanan. Silakan coba lagi.'
+                'message' => 'Terjadi kesalahan: ' . $th->getMessage()
             ], 400);
         }
     }
