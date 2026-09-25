@@ -931,7 +931,7 @@ class TransactionController extends Controller
 
                 $totalAmount = (int) array_sum($itemTotals);
 
-                $promoEngine = new PromoEngineService;
+                $promoEngine = new PromoEngineService();
                 $dynamicPromoResult = $promoEngine->calculate($totalAmount, $hasBundleProduct);
                 $merdekaDiscount = $dynamicPromoResult['discount_amount'];
                 if ($dynamicPromoResult['promo_tag'])
