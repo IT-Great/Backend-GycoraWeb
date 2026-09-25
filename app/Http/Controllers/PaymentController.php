@@ -1807,6 +1807,7 @@ class PaymentController extends Controller
 
     public function createInvoice(Request $request)
     {
+        dd(config('services.xendit.secret_key'));
         $request->validate([
             'transaction_id' => 'required|exists:transactions,id',
             'address_id' => 'required',
