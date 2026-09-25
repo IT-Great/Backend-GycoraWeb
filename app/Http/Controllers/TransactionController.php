@@ -188,12 +188,14 @@ class TransactionController extends Controller
             'message' => 'Menunggu giliran server...'
         ]), 900);
 
-        \App\Jobs\ProcessFlashSaleCheckout::dispatch(
-            $user->id,
-            $request->all(),
-            $request->ip(),
-            $ticketId
-        );
+        // \App\Jobs\ProcessFlashSaleCheckout::dispatch(
+        //     $user->id,
+        //     $request->all(),
+        //     $request->ip(),
+        //     $ticketId
+        // );
+
+        // return $this->executeCheckoutLogic($user->id, $request->all(), $request->ip(), $ticketId);
 
         return response()->json([
             'ticket_id' => $ticketId,
